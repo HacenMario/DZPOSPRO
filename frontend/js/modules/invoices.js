@@ -709,19 +709,22 @@ async function viewInvoiceModal(sale) {
   const pc       = primaryColor();
 
   // ✅ النص الترويسي
-  const headerText = settings.invoiceHeader && settings.invoiceHeader.trim() ? `
+const headerText = settings.invoiceHeader && settings.invoiceHeader.trim() ? `
     <div class="receipt-header-text" style="
-        font-size:13px;
-        color:var(--text-secondary);
+        font-size:0.8rem;
+        font-weight:600;
+        color:#444;
         text-align:center;
-        margin:4px 0 8px 0;
-        padding:4px 0;
-        border-bottom:1px dashed var(--border-color);
-        line-height:1.5;
+        margin:0.4rem 0 0.3rem 0;
+        padding:0;
+        line-height:1.6;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+        border-bottom:1px dashed #999;
+        padding-bottom:0.4rem;
     ">
         ${escapeHtml(settings.invoiceHeader)}
     </div>
-  ` : '';
+` : '';
 
   // Build normalized items + totals (parity with sales.js receipt)
   const items    = (sale.items || []).map(it => itemDisplay(it));
@@ -811,24 +814,24 @@ async function viewInvoiceModal(sale) {
         <div class="modal-body" style="padding:1rem;background:var(--bg-body);">
           <div id="receiptPrintArea">
             <div class="receipt-sheet">
-              <div class="receipt-head" style="text-align:center;">
-                <div class="receipt-store" style="font-size:1.6rem;font-weight:800;color:${pc};">${escapeHtml(settings.storeName || 'DZ POS PRO')}</div>
-                <div class="receipt-contact" style="margin-top:0.3rem;font-size:0.8rem;color:#444;line-height:1.6;">
-                  ${company.address ? `<div>${escapeHtml(company.address)}</div>` : ''}
-                  ${company.phone ? `<div>Tel: ${escapeHtml(company.phone)}</div>` : ''}
-                  ${company.whatsapp ? `<div>WhatsApp: ${escapeHtml(company.whatsapp)}</div>` : ''}
-                  ${company.email ? `<div>${escapeHtml(company.email)}</div>` : ''}
-                </div>
-                ${(company.rc || company.nif || company.nis || company.art) ? `
-                  <div class="receipt-fiscal" style="margin-top:0.4rem;font-size:0.72rem;font-weight:600;color:#444;">
-                    ${company.rc ? `<div>RC: ${escapeHtml(company.rc)}</div>` : ''}
-                    ${company.nif ? `<div>NIF: ${escapeHtml(company.nif)}</div>` : ''}
-                    ${company.nis ? `<div>NIS: ${escapeHtml(company.nis)}</div>` : ''}
-                    ${company.art ? `<div>ART: ${escapeHtml(company.art)}</div>` : ''}
-                  </div>` : ''}
-                ${headerText}
-              </div>
-              <hr style="border:none;border-top:2px solid ${pc};margin:0.6rem 0;" />
+<div class="receipt-head" style="text-align:center;">
+    <div class="receipt-store" style="font-size:1.6rem;font-weight:800;color:${pc};">${escapeHtml(settings.storeName || 'DZ POS PRO')}</div>
+    <div class="receipt-contact" style="margin-top:0.3rem;font-size:0.8rem;color:#444;line-height:1.6;">
+        ${company.address ? `<div>${escapeHtml(company.address)}</div>` : ''}
+        ${company.phone ? `<div>Tel: ${escapeHtml(company.phone)}</div>` : ''}
+        ${company.whatsapp ? `<div>WhatsApp: ${escapeHtml(company.whatsapp)}</div>` : ''}
+        ${company.email ? `<div>${escapeHtml(company.email)}</div>` : ''}
+    </div>
+    ${(company.rc || company.nif || company.nis || company.art) ? `
+        <div class="receipt-fiscal" style="margin-top:0.4rem;font-size:0.72rem;font-weight:600;color:#444;line-height:1.6;">
+            ${company.rc ? `<div>RC: ${escapeHtml(company.rc)}</div>` : ''}
+            ${company.nif ? `<div>NIF: ${escapeHtml(company.nif)}</div>` : ''}
+            ${company.nis ? `<div>NIS: ${escapeHtml(company.nis)}</div>` : ''}
+            ${company.art ? `<div>ART: ${escapeHtml(company.art)}</div>` : ''}
+        </div>` : ''}
+    ${headerText}
+</div>
+<hr style="border:none;border-top:2px solid ${pc};margin:0.6rem 0;" />
               <div class="receipt-meta">
                 <div><strong>FACTURE</strong></div>
                 <div><strong>${t('invoiceNumber', 'Invoice number')}:</strong> ${escapeHtml(invoiceNo)}</div>
@@ -1015,19 +1018,23 @@ async function downloadInvoicePdf(sale) {
       y += 2;
     }
 
-    // ✅ النص الترويسي في PDF
-    const headerText = (store.invoiceHeader || '').trim();
-    if (headerText) {
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(60, 60, 60);
-      const splitHeader = doc.splitTextToSize(headerText, pageWidth - 2 * margin);
-      splitHeader.forEach(line => {
+// ✅ النص الترويسي في PDF - بنفس حجم ونمط الخط
+const pdfHeaderText = (store.invoiceHeader || '').trim();
+if (pdfHeaderText) {
+    doc.setFontSize(9);      // نفس حجم font-size: 0.8rem (~9pt)
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(70, 70, 70);
+    const splitHeader = doc.splitTextToSize(pdfHeaderText, pageWidth - 2 * margin);
+    splitHeader.forEach(line => {
         doc.text(line, centerX, y, { align: 'center' });
-        y += 5;
-      });
-      y += 2;
-    }
+        y += 4.5;
+    });
+    // خط فاصل خفيف بعد النص الترويسي
+    doc.setDrawColor(150, 150, 150);
+    doc.setLineWidth(0.2);
+    doc.line(margin, y, rightX, y);
+    y += 4;
+}
 
     // ===== Separator line (primary color) =====
     doc.setDrawColor(prR, prG, prB);
