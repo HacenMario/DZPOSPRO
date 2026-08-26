@@ -703,20 +703,6 @@ async function viewInvoiceModal(sale) {
   if (!state.settings) await fetchSettings();
 
   const settings = state.settings || {};
-  // ✅ النص الترويسي
-const headerText = settings.invoiceHeader && settings.invoiceHeader.trim() ? `
-    <div class="receipt-header-text" style="
-        font-size:13px;
-        color:var(--text-secondary);
-        text-align:center;
-        margin:4px 0 8px 0;
-        padding:4px 0;
-        border-bottom:1px dashed var(--border-color);
-        line-height:1.5;
-    ">
-        ${escapeHtml(settings.invoiceHeader)}
-    </div>
-` : '';
   const company  = settings.companyInfo || {};
   const currency = settings.currency || 'DZD';
   const taxRate  = Number(settings.taxRate || 0);
