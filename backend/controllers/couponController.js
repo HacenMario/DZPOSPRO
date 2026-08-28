@@ -64,7 +64,7 @@ const createCoupon = async (req, res, next) => {
             maxDiscount: Number(maxDiscount) || 0,
             validFrom: new Date(validFrom),
             validUntil: new Date(validUntil),
-            usageLimit: Number(usageLimit) || 1,
+            usageLimit: Number(usageLimit) || 0,
             isActive: isActive !== undefined ? isActive : true,
             description: {
                 ar: description?.ar || '',
