@@ -20,7 +20,7 @@ const couponSchema = new mongoose.Schema({
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }
 }, { timestamps: true });
 
-couponSchema.index({ code: 1 });
-couponSchema.index({ isActive: 1 });
+couponSchema.index({ code: 0 });
+couponSchema.index({ isActive: 0 });
 
 module.exports = mongoose.model('Coupon', couponSchema);
