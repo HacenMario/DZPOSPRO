@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" data-theme="light">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#10b981" />
+    <title data-i18n="registerTitle">DZ POS PRO — إنشاء حساب</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/theme-light.css" />
+    <link rel="stylesheet" href="css/theme-dark.css" />
+    <link rel="stylesheet" href="css/main.css" />
+</head>
+<body class="login-page">
+    <main class="login-main">
+        <section class="login-card">
+            <div class="login-header">
+                <h2 data-i18n="registerTitle">إنشاء حساب</h2>
+                <p class="login-subtitle" data-i18n="registerSubtitle">أنشئ حساباً جديداً للوصول إلى النظام</p>
+            </div>
+
+            <div class="login-error" id="loginError" role="alert" aria-live="polite">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <span id="loginErrorMsg">—</span>
+            </div>
+
+            <div id="closedNotice" style="display:none; padding:1rem; background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.4); border-radius:8px; margin-bottom:1rem;">
+                <p style="margin:0; font-size:0.85rem; color:var(--text-secondary);" data-i18n="registrationClosed">التسجيل مغلق. تواصل مع المسؤول لإنشاء حساب.</p>
+                <a href="index.html" style="display:inline-block; margin-top:0.5rem; color:var(--primary); font-weight:600; font-size:0.85rem;" data-i18n="backToLogin">← العودة لتسجيل الدخول</a>
+            </div>
+            <!-- Registration is always open — the closedNotice is kept for future use but hidden -->
+
+            <form id="registerForm" class="login-form" novalidate>
+                <div class="form-group">
+                    <label for="name" data-i18n="name">الاسم</label>
+                    <div class="input-wrap">
+                        <span class="input-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        </span>
+                        <input class="input" type="text" id="name" name="name" placeholder="" autocomplete="name" required />
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="email" data-i18n="email">البريد الإلكتروني</label>
+                    <div class="input-wrap">
+                        <span class="input-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                        </span>
+                        <input class="input" type="email" id="email" name="email" placeholder="admin@example.com" autocomplete="username" required />
+                    </div>
+                </div>
+
+                <div class="help-text" style="font-size:0.75rem;color:var(--text-muted);" data-i18n="registerRoleNote">سيتم إنشاء حسابك بدور "كاشير". يمكن للمسؤول ترقية الصلاحية لاحقاً.</div>
+
+                <div class="form-group">
+                    <label for="password" data-i18n="password">كلمة المرور</label>
+                    <div class="input-wrap">
+                        <span class="input-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        </span>
+                        <input class="input" type="password" id="password" name="password" placeholder="••••••••" autocomplete="new-password" required minlength="8" />
+                        <button type="button" class="input-pw-toggle" id="pwToggle" aria-label="Show password">
+                            <svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            <svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                        </button>
+                    </div>
+                    <div class="help-text" data-i18n="passwordHint">8 أحرف على الأقل، مع حرف ورقم</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="confirmPassword" data-i18n="confirmPassword">تأكيد كلمة المرور</label>
+                    <div class="input-wrap">
+                        <span class="input-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        </span>
+                        <input class="input" type="password" id="confirmPassword" name="confirmPassword" placeholder="••••••••" autocomplete="new-password" required />
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-login" id="registerBtn">
+                    <span class="btn-spinner" aria-hidden="true"></span>
+                    <span class="btn-label" data-i18n="registerBtn">إنشاء الحساب</span>
+                </button>
+            </form>
+
+            <div class="login-meta">
+                <a href="index.html" style="color:var(--primary); font-weight:600; text-decoration:none; font-size:0.85rem;" data-i18n="haveAccount">لديك حساب؟ تسجيل الدخول</a>
+            </div>
+        </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="js/i18n.js"></script>
+    <script src="js/toast.js"></script>
+    <script>
+    (function() {
+        'use strict';
+
+        // Restore theme + language
+        try {
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            const tb = document.getElementById('themeToggle');
+            if (tb) tb.textContent = savedTheme === 'dark' ? '☀️' : '🌙';
+        } catch(_) {}
+
+        function showError(msg) {
+            const el = document.getElementById('loginError');
+            const span = document.getElementById('loginErrorMsg');
+            if (span) span.textContent = msg;
+            if (el) el.style.display = 'flex';
+        }
+        function clearError() {
+            const el = document.getElementById('loginError');
+            if (el) el.style.display = 'none';
+        }
+
+        // Registration is always open — no status check needed
+
+        // Password toggle
+        const pwToggle = document.getElementById('pwToggle');
+        const pwInput = document.getElementById('password');
+        if (pwToggle && pwInput) {
+            pwToggle.addEventListener('click', () => {
+                const show = pwInput.type === 'password';
+                pwInput.type = show ? 'text' : 'password';
+                pwToggle.querySelector('.icon-eye').style.display = show ? 'none' : 'block';
+                pwToggle.querySelector('.icon-eye-off').style.display = show ? 'block' : 'none';
+            });
+        }
+
+        // Form submit
+        const form = document.getElementById('registerForm');
+        if (form) {
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                clearError();
+
+                const name = document.getElementById('name').value.trim();
+                const email = document.getElementById('email').value.trim();
+                const password = document.getElementById('password').value;
+                const confirmPassword = document.getElementById('confirmPassword').value;
+
+                if (!name || name.length < 2) { showError('Name must be at least 2 characters'); return; }
+                if (!email) { showError('Email is required'); return; }
+                if (password.length < 8) { showError('Password must be at least 8 characters'); return; }
+                if (password !== confirmPassword) { showError('Passwords do not match'); return; }
+
+                const btn = document.getElementById('registerBtn');
+                btn.classList.add('is-loading');
+                btn.disabled = true;
+
+try {
+const API_BASE = (function () {
+      try {
+        const h = location.hostname;
+        const isLocal = (h === 'localhost' || h === '127.0.0.1' || h === '0.0.0.0' || location.protocol === 'file:');
+        if (isLocal) return '';
+      } catch (_) {}
+      return 'https://dzpospro-production.up.railway.app';
+    })();
+    const res = await fetch(`${API_BASE}/api/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password })
+    });
+    const data = await res.json();
+
+    if (res.ok && data.success) {
+        if (typeof window.Toast !== 'undefined' && window.Toast.success) {
+            window.Toast.success('Account created successfully! Please login.');
+        }
+        setTimeout(() => { window.location.href = 'index.html?registered=1'; }, 1500);
+    } else {
+        let msg = (data && data.message) || 'Registration failed';
+        if (data && Array.isArray(data.errors) && data.errors.length) {
+            msg = data.errors[0].message || msg;
+        }
+        showError(msg);
+    }
+} catch (err) {
+    showError('Cannot reach server');
+} finally {
+    btn.classList.remove('is-loading');
+    btn.disabled = false;
+}
+            });
+        }
+    })();
+    </script>
+</body>
+</html>
