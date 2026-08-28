@@ -1165,6 +1165,74 @@ const POS_CSS = `
   .pos-actions-row { gap: 0.4rem; }
   .pos-actions-row .btn { padding: 0.6rem 0.5rem; }
 }
+
+/* ============================================================
+ * Touch / tablet mode (body.touch-mode) — UI-ONLY enhancement.
+ * The class is added by JS when the device reports a coarse
+ * pointer or any touch points. Mouse-only desktops never get it,
+ * and every rule is scoped under .touch-mode — so appearance and
+ * behavior on normal desktops stay 100% unchanged. None of these
+ * rules touch sale logic.
+ * ============================================================ */
+.touch-mode .pos-product { padding: 0.85rem; }
+.touch-mode .pos-product-name { font-size: 0.95rem; }
+.touch-mode .pos-product-price { font-size: 1.08rem; }
+.touch-mode .pos-product .pos-add-hint { opacity: 1; transform: scale(1); width: 30px; height: 30px; }
+.touch-mode .pos-product .pos-add-hint svg { width: 18px; height: 18px; }
+.touch-mode .pos-cat-chip { min-height: 42px; padding: 0 1rem; font-size: 0.9rem; }
+.touch-mode .pos-qty button { min-width: 46px; min-height: 46px; font-size: 1.35rem; }
+.touch-mode .pos-qty input { min-height: 46px; width: 64px; font-size: 1.1rem; }
+.touch-mode .pos-cart-item-remove { min-width: 44px; min-height: 44px; }
+.touch-mode .pos-cart-close-mobile { min-width: 44px; min-height: 44px; }
+.touch-mode .pos-cb-btn, .touch-mode .pos-customer-btn, .touch-mode .pos-customer-clear { min-height: 46px; }
+.touch-mode .pos-pay-method { padding: 0.85rem 0.4rem; }
+.touch-mode .pos-pay-method span { font-size: 0.82rem; }
+.touch-mode .pos-quickcash-btn { min-height: 48px; font-size: 1.02rem; }
+.touch-mode .pos-coupon-toggle, .touch-mode .pos-cart-tab { min-height: 46px; }
+.touch-mode .pos-actions .btn, .touch-mode .pos-actions-row .btn { min-height: 50px; }
+.touch-mode .pos-mobile-summary { min-height: 62px; }
+/* While the on-screen numpad is open, hide the mobile cart bar (avoid overlap) */
+body.numpad-open .pos-mobile-summary { display: none !important; }
+
+/* ---- On-screen numeric keypad (POS qty / discount / payment) ---- */
+.pos-numpad {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 1400;
+  display: none;
+  padding: 0.6rem 0.6rem calc(0.6rem + env(safe-area-inset-bottom, 0px));
+  background: var(--bg-card);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.18);
+}
+.pos-numpad.open { display: block; }
+.pos-numpad-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  max-width: 430px;
+  margin: 0 auto;
+}
+.pos-numpad button {
+  height: 56px;
+  font-size: 1.35rem;
+  font-weight: 700;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-body);
+  color: var(--text-primary);
+  touch-action: manipulation;
+}
+.pos-numpad button:active { background: var(--bg-hover); transform: scale(0.97); }
+.pos-numpad .np-fn { color: var(--danger); }
+.pos-numpad .np-ok {
+  grid-row: span 2;
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+  font-size: 1.6rem;
+}
 </style>
 `;
 
@@ -3374,6 +3442,168 @@ if (headerText) {
  * Entry
  * ============================================================ */
 
+/* ============================================================
+ * Touch numpad (UI-ONLY enhancement)
+ * ------------------------------------------------------------
+ * On touch devices (body.touch-mode) an on-screen numeric keypad
+ * appears when a POS number input gets focus (qty, per-item
+ * discount, amount paid, split cash/card).
+ *
+ * It does NOT change any sale logic: every key only edits the
+ * input's value and then dispatches the SAME native `input` /
+ * `change` events the existing listeners already handle
+ * (change-due computation, totals refresh, split remaining,
+ * quantity clamping, deferred cart re-render...). Hardware
+ * keyboards and barcode scanners keep working exactly as before.
+ * ============================================================ */
+const POS_NUM_INPUT_SELECTOR = '#posAmountPaid, #posSplitCash, #posSplitCard, .pos-qty input[data-action="qty"], .pos-cart-item-disc input[data-action="disc"]';
+let posNumpadInput = null;
+let posNumpadFallbackSelector = '';
+
+function touchDeviceDetected() {
+  try {
+    if (typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches) return true;
+  } catch (_) { /* older browser */ }
+  return (navigator.maxTouchPoints || 0) > 0;
+}
+
+// Re-locate an input after the payment area is re-rendered (split inputs are
+// recreated on every `input` event by refreshCartTotalsAndPay).
+function posNumpadSelectorFor(inp) {
+  if (inp.id) return '#' + inp.id;
+  const row = inp.closest('.pos-cart-item');
+  if (row && row.dataset.idx !== undefined) {
+    return '#posCartItems .pos-cart-item[data-idx="' + row.dataset.idx + '"] input[data-action="' + inp.dataset.action + '"]';
+  }
+  return '';
+}
+
+function mountTouchNumpad() {
+  if (!document.body.classList.contains('touch-mode')) return;
+  const content = document.getElementById('pageContent');
+  if (!content || document.getElementById('posNumpad')) return;
+
+  content.insertAdjacentHTML('beforeend', `
+    <div class="pos-numpad" id="posNumpad">
+      <div class="pos-numpad-grid">
+        <button type="button" data-key="7">7</button>
+        <button type="button" data-key="8">8</button>
+        <button type="button" data-key="9">9</button>
+        <button type="button" class="np-fn" data-key="back" aria-label="Backspace">&#9003;</button>
+        <button type="button" data-key="4">4</button>
+        <button type="button" data-key="5">5</button>
+        <button type="button" data-key="6">6</button>
+        <button type="button" class="np-fn" data-key="clear" aria-label="Clear">C</button>
+        <button type="button" data-key="1">1</button>
+        <button type="button" data-key="2">2</button>
+        <button type="button" data-key="3">3</button>
+        <button type="button" class="np-ok" data-key="ok" aria-label="OK">&#10003;</button>
+        <button type="button" data-key="00">00</button>
+        <button type="button" data-key="0">0</button>
+        <button type="button" data-key=".">.</button>
+      </div>
+    </div>`);
+
+  const pad = document.getElementById('posNumpad');
+  // preventDefault on pointerdown keeps the focus on the active input, so
+  // pressing keys never blurs the field nor reopens the OS keyboard.
+  pad.addEventListener('pointerdown', (e) => e.preventDefault());
+  addListener(pad, 'click', (e) => {
+    const btn = e.target.closest('button[data-key]');
+    if (btn) handleNumpadKey(btn.dataset.key);
+  });
+
+  addListener(document, 'focusin', (e) => {
+    const t = e.target;
+    if (t && t.matches && t.matches(POS_NUM_INPUT_SELECTOR)) {
+      posNumpadInput = t;
+      posNumpadFallbackSelector = posNumpadSelectorFor(t);
+      showNumpad();
+    }
+  });
+  addListener(document, 'focusout', (e) => {
+    if (!posNumpadInput || e.target !== posNumpadInput) return;
+    setTimeout(() => {
+      const act = document.activeElement;
+      if (act && act.matches && act.matches(POS_NUM_INPUT_SELECTOR)) return; // moved to another target input
+      hideNumpad();
+    }, 0);
+  });
+}
+
+function showNumpad() {
+  const pad = document.getElementById('posNumpad');
+  if (!pad || !posNumpadInput) return;
+  // Suppress the OS virtual keyboard for this field — the numpad replaces it.
+  // Hardware keyboards and barcode scanners are NOT affected by inputmode.
+  try { posNumpadInput.setAttribute('inputmode', 'none'); } catch (_) {}
+  pad.classList.add('open');
+  document.body.classList.add('numpad-open');
+}
+
+function hideNumpad() {
+  const pad = document.getElementById('posNumpad');
+  if (pad) pad.classList.remove('open');
+  document.body.classList.remove('numpad-open');
+  if (posNumpadInput) { try { posNumpadInput.removeAttribute('inputmode'); } catch (_) {} }
+  posNumpadInput = null;
+  posNumpadFallbackSelector = '';
+}
+
+function handleNumpadKey(k) {
+  let inp = posNumpadInput;
+  if (inp && !document.contains(inp) && posNumpadFallbackSelector) {
+    inp = document.querySelector(posNumpadFallbackSelector);
+    if (inp) {
+      posNumpadInput = inp;
+      try { inp.setAttribute('inputmode', 'none'); } catch (_) {}
+    }
+  }
+  if (!inp || !document.contains(inp)) { hideNumpad(); return; }
+
+  if (k === 'ok') {
+    // Commit exactly like a real keyboard would (fires the deferred cart
+    // re-render / clamping handled by the existing `change` listeners).
+    inp.dispatchEvent(new Event('change', { bubbles: true }));
+    hideNumpad();
+    try { inp.blur(); } catch (_) {}
+    return;
+  }
+
+  const isNumber = (inp.getAttribute('type') === 'number');
+  let v = String(inp.value == null ? '' : inp.value);
+  if (k === 'back') v = v.slice(0, -1);
+  else if (k === 'clear') v = '';
+  else if (k === '.') { if (!v.includes('.')) v = v + '.'; }
+  else if (k === '00') { if (v && v !== '0') v = v + '00'; }
+  else { v = (v === '0') ? k : v + k; }
+
+  if (v.includes('.')) {
+    const parts = v.split('.');
+    if (parts[1].length > 2) v = parts[0] + '.' + parts[1].slice(0, 2); // max 2 decimals
+  }
+  // <input type=number> silently rejects values like "12." — keep it valid
+  if (isNumber) v = v.replace(/\.+$/, '');
+
+  inp.value = v;
+  // Re-dispatch the SAME event the OS keyboard would produce — all existing
+  // listeners (change due, totals, split remaining) react unchanged.
+  inp.dispatchEvent(new Event('input', { bubbles: true }));
+
+  // If the payment area got re-rendered by that input event (split mode),
+  // re-attach to the fresh element so the numpad keeps working mid-entry.
+  if (!document.contains(inp)) {
+    const fresh = posNumpadFallbackSelector ? document.querySelector(posNumpadFallbackSelector) : null;
+    if (fresh) {
+      posNumpadInput = fresh;
+      try { fresh.setAttribute('inputmode', 'none'); } catch (_) {}
+      try { fresh.focus({ preventScroll: true }); } catch (_) { try { fresh.focus(); } catch (_) {} }
+    } else {
+      hideNumpad();
+    }
+  }
+}
+
 export async function renderSalesPage() {
   const content = document.getElementById('pageContent');
   if (!content) return;
@@ -3436,6 +3666,11 @@ export async function renderSalesPage() {
 
   // Bind events
   bindEvents();
+
+  // Touch / tablet mode — UI-only: adds body.touch-mode (bigger tap targets)
+  // and mounts the on-screen numpad. Detection only; zero sale-logic impact.
+  if (touchDeviceDetected()) document.body.classList.add('touch-mode');
+  mountTouchNumpad();
 
   // Refresh cart display (in case a saved cart was restored)
   refreshCart();

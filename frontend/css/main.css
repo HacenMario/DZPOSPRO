@@ -7,6 +7,9 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* Touch devices: remove the tap delay + double-tap zoom on controls (UI-only) */
+button, a, input, select, textarea, label { touch-action: manipulation; }
+
 html { -webkit-text-size-adjust: 100%; }
 
 body {
