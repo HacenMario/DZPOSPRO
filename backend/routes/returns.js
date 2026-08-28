@@ -9,5 +9,6 @@ const { idParamValidation, paginationValidation } = require('../middleware/valid
 router.get('/', authMiddleware, roleMiddleware('admin', 'manager'), paginationValidation, returnController.getReturns);
 router.get('/:id', authMiddleware, roleMiddleware('admin', 'manager'), idParamValidation, returnController.getReturnById);
 router.post('/', authMiddleware, roleMiddleware('admin', 'manager'), returnController.createReturn);
+router.delete('/:id', authMiddleware, roleMiddleware('admin', 'manager'), idParamValidation, returnController.deleteReturn);
 
 module.exports = router;

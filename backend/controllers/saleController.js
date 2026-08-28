@@ -441,6 +441,25 @@ const getSaleById = async (req, res, next) => {
         obj.notes = sale.notes?.[lang] || sale.notes?.ar || '';
         obj.storeInfo = storeInfo;
 
+        // Attach the quantity already returned per item so clients (Returns
+        // wizard) can cap "max returnable" correctly. Keys fall back to the
+        // product id for old Return docs missing the saleItem ref.
+        try {
+            const Return = require('../models/Return');
+            const rets = await Return.find({ sale: sale._id }).select('items').lean();
+            const rmap = {};
+            rets.forEach(r => (r.items || []).forEach(it => {
+                const k = String(it.saleItem || it.product);
+                rmap[k] = (rmap[k] || 0) + Number(it.quantity || 0);
+            }));
+            (obj.items || []).forEach(it => {
+                const pid = it.product && (it.product._id || it.product);
+                it.returnedQuantity = rmap[String(it._id)] != null ? rmap[String(it._id)] : (rmap[String(pid)] || 0);
+            });
+        } catch (e) {
+            logger.warn('getSaleById returnedQuantity attach failed:', e.message);
+        }
+
         if (obj.customer && obj.customer.name) {
             obj.customerInfo = {
                 name: obj.customer.name?.[lang] || obj.customer.name?.ar || '',

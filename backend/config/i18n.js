@@ -62,7 +62,8 @@ const translations = {
         saleNotFound: 'الفاتورة غير موجودة',
         saleReturned: 'تم إرجاع المنتجات بنجاح',
         saleAlreadyReturned: 'هذه الفاتورة تم إرجاعها مسبقاً',
-        saleCancelled: 'تم إلغاء الفاتورة بنجاح',
+
+        returnDeleted: 'تم حذف الإرجاع بنجاح',        saleCancelled: 'تم إلغاء الفاتورة بنجاح',
         saleCannotCancel: 'لا يمكن إلغاء فاتورة مرتجعة',
         sessionRequired: 'لا يمكن إجراء عملية بيع بدون جلسة مفتوحة',
         saleItemNotFound: 'المنتج غير موجود في هذه الفاتورة',
@@ -174,7 +175,8 @@ const translations = {
         saleNotFound: 'Invoice not found',
         saleReturned: 'Products returned successfully',
         saleAlreadyReturned: 'This invoice has already been returned',
-        saleCancelled: 'Invoice cancelled successfully',
+
+        returnDeleted: 'Return deleted successfully',        saleCancelled: 'Invoice cancelled successfully',
         saleCannotCancel: 'Cannot cancel a returned invoice',
         sessionRequired: 'Cannot perform a sale without an open session',
         saleItemNotFound: 'Product not found in this invoice',
@@ -286,7 +288,8 @@ const translations = {
         saleNotFound: 'Facture introuvable',
         saleReturned: 'Produits retournés avec succès',
         saleAlreadyReturned: 'Cette facture a déjà été retournée',
-        saleCancelled: 'Facture annulée avec succès',
+
+        returnDeleted: 'Retour supprimé avec succès',        saleCancelled: 'Facture annulée avec succès',
         saleCannotCancel: 'Impossible d\'annuler une facture retournée',
         sessionRequired: 'Impossible de vendre sans session ouverte',
         saleItemNotFound: 'Produit introuvable dans cette facture',

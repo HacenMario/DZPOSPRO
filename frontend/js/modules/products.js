@@ -524,7 +524,7 @@ function openProductModal(product) {
                 </div>
                 <div class="form-group">
                   <label class="form-label">${t('unit', 'Unit')}</label>
-                  <input class="input" id="unit" type="text" value="${product && product.unit ? escapeHtml(product.unit) : ''}" />
+                  <input class="input" id="unit" type="text" value="${product && product.unit ? escapeHtml(product.unit) : 'قطعة'}" />
                 </div>
                 <div class="form-group">
                   <label class="form-label">${t('timbre', 'Timbre')}</label>
@@ -645,7 +645,7 @@ function openProductModal(product) {
         minStock: parseInt(overlay.querySelector('#minStock').value, 10) || 0,
         barcode: overlay.querySelector('#barcode').value.trim() || undefined,
         sku: overlay.querySelector('#sku').value.trim() || undefined,
-        unit: overlay.querySelector('#unit').value.trim() || undefined,
+        unit: overlay.querySelector('#unit').value.trim() || 'قطعة',
         timbre: parseFloat(overlay.querySelector('#timbre').value) || 0,
         tax: parseFloat(overlay.querySelector('#tax').value) || 0,
         category: overlay.querySelector('#category').value || null,
