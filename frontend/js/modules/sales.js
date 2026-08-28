@@ -3298,15 +3298,15 @@ if (headerText) {
     doc.text(subtotal.toFixed(2) + ' ' + currency, valueX, y, { align: 'right' }); y += 6;
     if (itemDiscounts > 0) {
       doc.text((IL.itemDiscounts || 'Remises articles') + ' :', labelX, y);
-      doc.text('−' + itemDiscounts.toFixed(2) + ' ' + currency, valueX, y, { align: 'right' }); y += 6;
+      doc.text('-' + itemDiscounts.toFixed(2) + ' ' + currency, valueX, y, { align: 'right' }); y += 6;
     }
     if (cartDiscount > 0) {
       doc.text((IL.cartDiscount || 'Remise') + ' :', labelX, y);
-      doc.text('−' + cartDiscount.toFixed(2) + ' ' + currency, valueX, y, { align: 'right' }); y += 6;
+      doc.text('-' + cartDiscount.toFixed(2) + ' ' + currency, valueX, y, { align: 'right' }); y += 6;
     }
     if (couponDiscount > 0) {
       doc.text((IL.coupon || 'Coupon') + ' :', labelX, y);
-      doc.text('−' + couponDiscount.toFixed(2) + ' ' + currency, valueX, y, { align: 'right' }); y += 6;
+      doc.text('-' + couponDiscount.toFixed(2) + ' ' + currency, valueX, y, { align: 'right' }); y += 6;
     }
     if (tax > 0) {
       doc.text((IL.vat || 'TVA') + ' (' + taxRate + ' %) :', labelX, y);

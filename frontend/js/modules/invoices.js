@@ -1225,15 +1225,15 @@ if (pdfHeaderText) {
     doc.text(subtotal.toFixed(2) + ' ' + currency, valueX, y, { align: 'right' }); y += 6;
     if (itemDiscounts > 0) {
       doc.text(t('perItemDiscount', 'Item discounts') + ' :', labelX, y);
-      doc.text('−' + itemDiscounts.toFixed(2) + ' ' + currency, valueX, y, { align: 'right' }); y += 6;
+      doc.text('-' + itemDiscounts.toFixed(2) + ' ' + currency, valueX, y, { align: 'right' }); y += 6;
     }
     if (cartDiscount > 0) {
       doc.text(t('discount', 'Cart discount') + ' :', labelX, y);
-      doc.text('−' + cartDiscount.toFixed(2) + ' ' + currency, valueX, y, { align: 'right' }); y += 6;
+      doc.text('-' + cartDiscount.toFixed(2) + ' ' + currency, valueX, y, { align: 'right' }); y += 6;
     }
     if (couponDiscount > 0) {
       doc.text(t('couponDiscount', 'Coupon') + ' :', labelX, y);
-      doc.text('−' + couponDiscount.toFixed(2) + ' ' + currency, valueX, y, { align: 'right' }); y += 6;
+      doc.text('-' + couponDiscount.toFixed(2) + ' ' + currency, valueX, y, { align: 'right' }); y += 6;
     }
     if (tax > 0) {
       doc.text('TVA (' + taxRate + ' %) :', labelX, y);
