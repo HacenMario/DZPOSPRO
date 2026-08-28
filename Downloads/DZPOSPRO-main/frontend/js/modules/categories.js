@@ -129,6 +129,7 @@ function renderTable() {
             <th>#</th>
             <th>${t('name', 'Name')}</th>
             <th>${t('description', 'Description')}</th>
+            <th>${t('parentCategory', 'Parent category')}</th>
             <th>${t('status', 'Status')}</th>
             <th>${t('actions', 'Actions')}</th>
           </tr>
@@ -291,6 +292,11 @@ async function openCategoryModal(category) {
                 placeholder="${escapeHtml(t('descriptionPlaceholder', 'Optional category description'))}">${category ? escapeHtml(category.displayDescription || (category.description && (category.description.ar || category.description.en || category.description.fr)) || '') : ''}</textarea>
             </div>
 
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">${t('parentCategory', 'Parent category')}</label>
+                <select class="select" id="catParent">${parentOpts}</select>
+              </div>
               <div class="form-group">
                 <label class="form-label">${t('status', 'Status')}</label>
                 <select class="select" id="catIsActive">

@@ -233,6 +233,9 @@ function renderTable() {
             <button class="table-action-btn view" data-id="${r._id}" aria-label="${t('viewReturn', 'View return')}" title="${t('viewReturn', 'View return')}">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
             </button>
+            <button class="table-action-btn delete" data-del-id="${r._id}" aria-label="${t('deleteReturn', 'Delete return')}" title="${t('deleteReturn', 'Delete return')}">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
           </div>
         </td>
       </tr>`;
@@ -344,6 +347,10 @@ function bindTable() {
   document.querySelectorAll('#returnsTableContainer .table-action-btn.view').forEach(b => {
     b.addEventListener('click', () => openViewReturnModal(b.dataset.id));
   });
+  // Row-level delete button (next to the view button)
+  document.querySelectorAll('#returnsTableContainer .table-action-btn.delete').forEach(b => {
+    b.addEventListener('click', () => deleteReturn(b.dataset.delId));
+  });
   document.querySelectorAll('#returnsTableContainer [data-sale-id]').forEach(b => {
     b.addEventListener('click', () => openSaleDetailModal(b.dataset.saleId, b.dataset.saleNumber));
   });
@@ -362,6 +369,28 @@ async function refreshTable() {
   await fetchReturns();
   if (container) container.innerHTML = renderTable();
   bindTable();
+}
+
+/* ---------- Delete return (row action) ---------- */
+async function deleteReturn(id) {
+  if (!id) return;
+  const ok = await (window.Toast && window.Toast.confirm
+    ? window.Toast.confirm(t('deleteReturnConfirm', 'Delete this return? Stock and customer totals will be restored.'))
+    : Promise.resolve(window.confirm(t('deleteReturnConfirm', 'Delete this return?'))));
+  if (!ok) return;
+  try {
+    const r = await apiFetch.delete('/api/returns/' + id);
+    if (r && r.success) {
+      if (window.Toast) window.Toast.success(t('returnDeleted', 'Return deleted successfully'));
+      // If the last row of the current page was deleted, step back a page
+      if (state.items.length <= 1 && state.page > 1) state.page -= 1;
+      await refreshTable();
+    } else {
+      throw new Error((r && r.message) || t('deleteFailed', 'Delete failed'));
+    }
+  } catch (e) {
+    if (window.Toast) window.Toast.error((e && e.message) || t('deleteFailed', 'Delete failed'));
+  }
 }
 
 /* ---------- View return modal ---------- */
@@ -1037,6 +1066,10 @@ async function submitReturn() {
     if (r && r.success) {
       if (window.Toast) window.Toast.success(t('returnCreated', 'Return created successfully'));
       overlay.remove();
+      // Jump to page 1 so the freshly created return (sorted by date) is
+      // visible immediately — otherwise it seemed to "only appear after a
+      // full page reload".
+      state.page = 1;
       await refreshTable();
     } else {
       throw new Error((r && r.message) || 'Failed');
