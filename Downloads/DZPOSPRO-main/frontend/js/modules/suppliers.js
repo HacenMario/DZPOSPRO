@@ -169,14 +169,14 @@ function renderTable() {
     const idx = (state.page - 1) * state.limit + i + 1;
     return `
       <tr>
-        <td class="cell-muted" data-label="#">${idx}</td>
-        <td class="cell-strong" data-label="${t('supplierName', 'Name')}">${escapeHtml(name)}</td>
-        <td data-label="${t('contactPerson', 'Contact person')}">${escapeHtml(s.contactName || '—')}</td>
-        <td class="cell-mono" data-label="${t('phone', 'Phone')}">${escapeHtml(s.phone || '—')}</td>
-        <td class="cell-muted" data-label="${t('emailAddress', 'Email')}">${s.email ? '<a href="mailto:' + escapeHtml(s.email) + '" style="color:inherit;">' + escapeHtml(s.email) + '</a>' : '—'}</td>
-        <td class="cell-muted" data-label="${t('address', 'Address')}" title="${escapeHtml(addr)}">${addr ? truncate(addr, 28) : '—'}</td>
-        <td data-label="${t('fiscalInfo', 'Fiscal info')}">${fiscal}</td>
-        <td data-label="${t('status', 'Status')}">${statusBadge}</td>
+        <td class="cell-muted">${idx}</td>
+        <td class="cell-strong">${escapeHtml(name)}</td>
+        <td>${escapeHtml(s.contactName || '—')}</td>
+        <td class="cell-mono">${escapeHtml(s.phone || '—')}</td>
+        <td class="cell-muted">${s.email ? '<a href="mailto:' + escapeHtml(s.email) + '" style="color:inherit;">' + escapeHtml(s.email) + '</a>' : '—'}</td>
+        <td class="cell-muted" title="${escapeHtml(addr)}">${addr ? truncate(addr, 28) : '—'}</td>
+        <td>${fiscal}</td>
+        <td>${statusBadge}</td>
         <td>
           <div class="table-actions">
             <button class="table-action-btn edit" data-id="${s._id}" aria-label="${t('edit', 'Edit')}" title="${t('edit', 'Edit')}">

@@ -446,7 +446,7 @@ function bindProfileTab() {
         return;
       }
       try {
-        const r = await apiFetch.put('/api/auth/change-password', { oldPassword: cur, newPassword: neu });
+        const r = await apiFetch.put('/api/auth/change-password', { currentPassword: cur, newPassword: neu });
         if (r && r.success) {
           if (window.Toast) window.Toast.success(t('passwordChanged', 'Password changed'));
           passwordForm.reset();

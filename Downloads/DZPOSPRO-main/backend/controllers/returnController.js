@@ -46,6 +46,7 @@ const createReturn = async (req, res, next) => {
             for (const item of items) {
                 const productId = item.product || item.productId;
                 const qty = Number(item.quantity);
+                const price = Number(item.price);
                 if (!productId || !Number.isFinite(qty) || qty < 1) {
                     throw Object.assign(new Error(getTranslation('missingFields', lang)), { statusCode: 400, expose: true });
                 }
@@ -59,21 +60,11 @@ const createReturn = async (req, res, next) => {
                 if (!saleItem) {
                     throw Object.assign(new Error(getTranslation('saleItemNotFound', lang)), { statusCode: 400, expose: true });
                 }
-
-                // Cumulative cap across multiple return requests
-                const previouslyReturned = saleItem.returnedQuantity || 0;
-                const remaining = saleItem.quantity - previouslyReturned;
-                if (qty > remaining) {
-                    throw Object.assign(
-                        new Error(`${getTranslation('returnQtyExceeded', lang)} (${Math.max(0, remaining)})`),
-                        { statusCode: 400, expose: true }
-                    );
+                if (saleItem.quantity < qty) {
+                    throw Object.assign(new Error(getTranslation('returnQtyExceeded', lang)), { statusCode: 400, expose: true });
                 }
 
-                // Refund at the recorded sale-time unit price — client-sent prices
-                // are never trusted.
-                const price = saleItem.price;
-                const refundAmount = price * qty;
+                const refundAmount = (Number.isFinite(price) ? price : saleItem.price) * qty;
                 totalRefund += refundAmount;
 
                 const product = await Product.findById(productId).session(session);
@@ -97,14 +88,10 @@ const createReturn = async (req, res, next) => {
                     saleItem: saleItem._id,
                     product: productId,
                     quantity: qty,
-                    price,
+                    price: Number.isFinite(price) ? price : saleItem.price,
                     total: refundAmount,
                     reason: typeof item.reason === 'string' ? item.reason : ''
                 });
-
-                // Track cumulative returned quantity on the sale item
-                saleItem.returnedQuantity = previouslyReturned + qty;
-                await saleItem.save({ session });
             }
 
             const [returnDoc] = await Return.create([{
@@ -119,12 +106,7 @@ const createReturn = async (req, res, next) => {
                 createdBy: req.userId
             }], { session });
 
-            // Only mark the sale fully 'returned' when every line item has been
-            // returned in full; partial returns keep it 'completed' so existing
-            // revenue/report filters stay intact — the Return records document refunds.
-            const allItems = await SaleItem.find({ sale: sale._id }).session(session);
-            const fullyReturned = allItems.length > 0 && allItems.every(it => (it.returnedQuantity || 0) >= it.quantity);
-            sale.status = fullyReturned ? 'returned' : 'completed';
+            sale.status = 'returned';
             await sale.save({ session });
 
             if (sale.customer) {

@@ -52,7 +52,19 @@
                     </div>
                 </div>
 
-                <div class="help-text" style="font-size:0.75rem;color:var(--text-muted);" data-i18n="registerRoleNote">سيتم إنشاء حسابك بدور "كاشير". يمكن للمسؤول ترقية الصلاحية لاحقاً.</div>
+                <div class="form-group">
+                    <label for="role" data-i18n="role">الدور</label>
+                    <div class="input-wrap">
+                        <span class="input-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                        </span>
+                        <select class="input" id="role" name="role" required style="padding-inline-start:2.5rem;appearance:none;-webkit-appearance:none;-moz-appearance:none;background:var(--bg-input);">
+                            <option value="cashier" data-i18n="roleCashier">كاشير</option>
+                            <option value="manager" data-i18n="roleManager">مدير فرعي</option>
+                            <option value="admin" data-i18n="roleAdmin">مدير</option>
+                        </select>
+                    </div>
+                </div>
 
                 <div class="form-group">
                     <label for="password" data-i18n="password">كلمة المرور</label>
@@ -66,7 +78,7 @@
                             <svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
                         </button>
                     </div>
-                    <div class="help-text" data-i18n="passwordHint">8 أحرف على الأقل، مع حرف ورقم</div>
+                    <div class="help-text" data-i18n="passwordHint">6 أحرف على الأقل</div>
                 </div>
 
                 <div class="form-group">
@@ -142,29 +154,24 @@
                 const email = document.getElementById('email').value.trim();
                 const password = document.getElementById('password').value;
                 const confirmPassword = document.getElementById('confirmPassword').value;
+                const role = document.getElementById('role').value;
 
                 if (!name || name.length < 2) { showError('Name must be at least 2 characters'); return; }
                 if (!email) { showError('Email is required'); return; }
-                if (password.length < 8) { showError('Password must be at least 8 characters'); return; }
+                if (password.length < 6) { showError('Password must be at least 6 characters'); return; }
                 if (password !== confirmPassword) { showError('Passwords do not match'); return; }
+                if (!['admin', 'manager', 'cashier'].includes(role)) { showError('Invalid role'); return; }
 
                 const btn = document.getElementById('registerBtn');
                 btn.classList.add('is-loading');
                 btn.disabled = true;
 
 try {
-const API_BASE = (function () {
-      try {
-        const h = location.hostname;
-        const isLocal = (h === 'localhost' || h === '127.0.0.1' || h === '0.0.0.0' || location.protocol === 'file:');
-        if (isLocal) return '';
-      } catch (_) {}
-      return 'https://dzpospro-production.up.railway.app';
-    })();
+    const API_BASE = 'https://dzpospro-production.up.railway.app';
     const res = await fetch(`${API_BASE}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password })
+        body: JSON.stringify({ name, email, password, role })
     });
     const data = await res.json();
 

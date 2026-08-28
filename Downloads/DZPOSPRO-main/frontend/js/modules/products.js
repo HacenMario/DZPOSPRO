@@ -160,21 +160,21 @@ function renderTable() {
       : '<span class="badge badge-primary">' + t('active', 'Active') + '</span>';
     
     const thumb = p.images && p.images.length
-      ? '<img class="cell-thumb" src="' + escapeHtml(p.images[0]) + '" alt="" loading="lazy" />'
+      ? '<img class="cell-thumb" src="' + escapeHtml(window.resolveAssetUrl ? window.resolveAssetUrl(p.images[0]) : p.images[0]) + '" alt="" loading="lazy" />'
       : '<div class="cell-thumb-placeholder" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>';
     
     const idx = (state.page - 1) * state.limit + i + 1;
     return `
       <tr>
-        <td class="cell-muted" data-label="#">${idx}</td>
+        <td class="cell-muted">${idx}</td>
         <td>${thumb}</td>
-        <td class="cell-strong" data-label="${t('name', 'Name')}">${escapeHtml(name)}</td>
-        <td class="cell-mono" data-label="${t('barcode', 'Barcode')}">${escapeHtml(p.barcode || '—')}</td>
-        <td data-label="${t('category', 'Category')}">${escapeHtml(categoryName)}</td>
-        <td data-label="${t('price', 'Price')}">${fmtCurrency(p.price)}</td>
-        <td data-label="${t('stock', 'Stock')}">${escapeHtml(String(p.stock || 0))} <span class="text-muted">/ ${escapeHtml(String(p.minStock || 0))}</span></td>
-        <td data-label="${t('stockStatus', 'Stock status')}">${stockBadge}</td>
-        <td data-label="${t('active', 'Active')}">${statusBadge}</td>
+        <td class="cell-strong">${escapeHtml(name)}</td>
+        <td class="cell-mono">${escapeHtml(p.barcode || '—')}</td>
+        <td>${escapeHtml(categoryName)}</td>
+        <td>${fmtCurrency(p.price)}</td>
+        <td>${escapeHtml(String(p.stock || 0))} <span class="text-muted">/ ${escapeHtml(String(p.minStock || 0))}</span></td>
+        <td>${stockBadge}</td>
+        <td>${statusBadge}</td>
         <td>
           <div class="table-actions">
             <button class="table-action-btn edit" data-id="${p._id}" aria-label="${t('edit', 'Edit')}" title="${t('edit', 'Edit')}">
@@ -213,7 +213,7 @@ function renderTable() {
             <th>${t('category', 'Category')}</th>
             <th>${t('price', 'Price')}</th>
             <th>${t('stock', 'Stock')}</th>
-            <th>${t('stockStatus', 'Stock status')}</th>
+            <th>${t('status', 'Status')}</th>
             <th>${t('active', 'Active')}</th>
             <th>${t('actions', 'Actions')}</th>
           </tr>
@@ -230,20 +230,64 @@ function renderTable() {
 /* ---------- Fetch ---------- */
 async function fetchCategories() {
   try {
-    const r = await apiFetch.get('/api/categories', { limit: 1000 });
+    const token = localStorage.getItem('token');
+    console.log('🔵 Fetching categories with token:', token ? 'Yes' : 'No');
+    
+    const response = await fetch('https://dzpospro-production.up.railway.app/api/categories?limit=1000', {
+      method: 'GET',
+      headers: {
+        'Authorization': 'Bearer ' + token,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    console.log('🔵 Response status:', response.status);
+    const data = await response.json();
+    console.log('📦 Full API response:', JSON.stringify(data, null, 2));
+    
     let categories = [];
-    if (r && r.success) {
-      if (r.data && Array.isArray(r.data.categories)) categories = r.data.categories;
-      else if (Array.isArray(r.data)) categories = r.data;
-      else if (Array.isArray(r.categories)) categories = r.categories;
-      else if (r.data && r.data.data && Array.isArray(r.data.data)) categories = r.data.data;
-    } else if (Array.isArray(r)) {
-      categories = r;
-    } else if (r && Array.isArray(r.data)) {
-      categories = r.data;
+    
+    // ✅ استخراج المصفوفة من المسار الصحيح
+    if (data && data.success) {
+      // الحالة الصحيحة: data.data.categories هي المصفوفة
+      if (data.data && data.data.categories && Array.isArray(data.data.categories)) {
+        categories = data.data.categories;
+        console.log('📦 Extracted from data.data.categories');
+      }
+      // الحالة 2: data.data هي المصفوفة مباشرة
+      else if (data.data && Array.isArray(data.data)) {
+        categories = data.data;
+        console.log('📦 Extracted from data.data');
+      }
+      // الحالة 3: data.categories هي المصفوفة
+      else if (data.categories && Array.isArray(data.categories)) {
+        categories = data.categories;
+        console.log('📦 Extracted from data.categories');
+      }
+      // الحالة 4: data.data.data هي المصفوفة
+      else if (data.data && data.data.data && Array.isArray(data.data.data)) {
+        categories = data.data.data;
+        console.log('📦 Extracted from data.data.data');
+      }
+    } else if (data && Array.isArray(data)) {
+      categories = data;
+      console.log('📦 Extracted from data (array)');
+    } else if (data && data.data && Array.isArray(data.data)) {
+      categories = data.data;
+      console.log('📦 Extracted from data.data');
     }
+    
     state.categories = categories;
-  } catch (e) {
+    console.log('✅ Categories loaded:', state.categories.length);
+    
+    // عرض تفاصيل الفئات
+    if (categories.length > 0) {
+      console.log('📦 First category:', categories[0]);
+      console.log('📦 Category names:', categories.map(c => c.name?.ar || c.name || 'unnamed'));
+    } else {
+      console.warn('⚠️ No categories found in response');
+    }
+  } catch (e) { 
     console.error('[products] fetchCategories error:', e);
     state.categories = [];
   }
@@ -289,6 +333,7 @@ function render() {
   if (!content) return;
   
   const categories = Array.isArray(state.categories) ? state.categories : [];
+  console.log('📦 Rendering with categories:', categories.length);
   
   content.innerHTML = renderToolbar() + '<div id="productsTableContainer">' + renderTable() + '</div>';
   bindToolbar();
@@ -329,14 +374,13 @@ function bindToolbar() {
   });
   const addBtn = document.getElementById('addProductBtn');
   if (addBtn) addBtn.addEventListener('click', () => openProductModal(null));
+  const emptyAdd = document.getElementById('emptyAddBtn');
+  if (emptyAdd) emptyAdd.addEventListener('click', () => openProductModal(null));
   const refresh = document.getElementById('productRefreshBtn');
   if (refresh) refresh.addEventListener('click', () => refreshTable());
 }
 
 function bindTable() {
-  // Bound here (not bindToolbar) so the empty-state button survives every table refresh
-  const emptyAdd = document.getElementById('emptyAddBtn');
-  if (emptyAdd) emptyAdd.addEventListener('click', () => openProductModal(null));
   document.querySelectorAll('#productsTableContainer .table-action-btn.edit').forEach(b => {
     b.addEventListener('click', () => {
       const p = state.items.find(x => x._id === b.dataset.id);
@@ -389,15 +433,18 @@ function openProductModal(product) {
   const loadAndOpen = async () => {
     // إذا كانت الفئات فارغة، قم بتحميلها
     if (!state.categories || state.categories.length === 0) {
+      console.log('🔵 Loading categories before opening modal...');
       await fetchCategories();
     }
     
+    console.log('📦 Categories before building modal:', state.categories.length);
     buildModal(product);
   };
   
   function buildModal(product) {
     const isEdit = !!product;
     const cats = Array.isArray(state.categories) ? state.categories : [];
+    console.log('📦 Building modal with categories:', cats.length);
     
     const currentCatId = product && product.category
       ? (typeof product.category === 'object' ? (product.category._id || '').toString() : String(product.category))
@@ -416,6 +463,7 @@ function openProductModal(product) {
       });
     }
     
+    console.log('📦 Category options count:', catOpts.split('<option').length - 1);
     
     const html = `
       <div class="modal-overlay" id="productModal" role="dialog" aria-modal="true" aria-labelledby="productModalTitle">
@@ -476,7 +524,7 @@ function openProductModal(product) {
                 </div>
                 <div class="form-group">
                   <label class="form-label">${t('unit', 'Unit')}</label>
-                  <input class="input" id="unit" type="text" value="${product && product.unit ? escapeHtml(product.unit) : 'قطعة'}" />
+                  <input class="input" id="unit" type="text" value="${product && product.unit ? escapeHtml(product.unit) : ''}" />
                 </div>
                 <div class="form-group">
                   <label class="form-label">${t('timbre', 'Timbre')}</label>
@@ -545,7 +593,7 @@ function openProductModal(product) {
         const wrap = document.createElement('div');
         wrap.style.cssText = 'position:relative;width:64px;height:64px;';
         const img = document.createElement('img');
-        img.src = src; img.alt = '';
+        img.src = (window.resolveAssetUrl ? window.resolveAssetUrl(src) : src); img.alt = '';
         img.style.cssText = 'width:64px;height:64px;border-radius:8px;object-fit:cover;border:1px solid var(--border-color);';
         const del = document.createElement('button');
         del.type = 'button';
@@ -597,7 +645,7 @@ function openProductModal(product) {
         minStock: parseInt(overlay.querySelector('#minStock').value, 10) || 0,
         barcode: overlay.querySelector('#barcode').value.trim() || undefined,
         sku: overlay.querySelector('#sku').value.trim() || undefined,
-        unit: overlay.querySelector('#unit').value.trim() || 'قطعة',
+        unit: overlay.querySelector('#unit').value.trim() || undefined,
         timbre: parseFloat(overlay.querySelector('#timbre').value) || 0,
         tax: parseFloat(overlay.querySelector('#tax').value) || 0,
         category: overlay.querySelector('#category').value || null,
@@ -659,6 +707,7 @@ export async function renderProductsPage() {
 
   // ✅ تأكد من تحميل الفئات أولاً
   await fetchCategories();
+  console.log('✅ Categories loaded in renderProductsPage:', state.categories.length);
   
   await fetchProducts();
   render();

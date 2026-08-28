@@ -157,7 +157,7 @@ function renderToolbar() {
     <div class="page-header">
       <div class="page-title-block">
         <h1 class="page-title">
-          <svg id="pageTitleIconReturns" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+          <svg id="pageTitleIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
           <span class="page-title-text">${t('returns', 'Returns')}</span>
         </h1>
         <div class="page-subtitle">${t('returnsSubtitle', 'Process refunds and merchandise returns')}</div>
@@ -216,18 +216,18 @@ function renderTable() {
     const idx = (state.page - 1) * state.limit + i + 1;
     return `
       <tr>
-        <td class="cell-muted" data-label="#">${idx}</td>
-        <td class="cell-strong" data-label="${t('returnNumber', 'Return #')}" style="font-family:var(--font-mono, monospace);">${escapeHtml(returnNumber(r))}</td>
-        <td data-label="${t('saleNumber', 'Sale #')}">
+        <td class="cell-muted">${idx}</td>
+        <td class="cell-strong" style="font-family:var(--font-mono, monospace);">${escapeHtml(returnNumber(r))}</td>
+        <td>
           <button class="btn btn-ghost btn-sm" type="button" data-sale-id="${sale._id || ''}" data-sale-number="${escapeHtml(sNum)}" style="padding:0.15rem 0.4rem;height:auto;font-family:var(--font-mono, monospace);color:var(--primary);">
             ${escapeHtml(sNum)}
           </button>
         </td>
-        <td data-label="${t('items', 'Items')}">${fmtNumber(itemsCount)}</td>
-        <td class="cell-strong" data-label="${t('returnTotal', 'Total refund')}">${escapeHtml(fmtCurrency(totalRefund))}</td>
-        <td class="cell-muted" data-label="${t('reason', 'Reason')}">${escapeHtml(reason || '—')}</td>
-        <td class="cell-muted" data-label="${t('createdBy', 'Created by')}">${createdBy}</td>
-        <td class="cell-muted" data-label="${t('date', 'Date')}"><span dir="ltr">${escapeHtml(fmtDateTime(r.createdAt))}</span></td>
+        <td>${fmtNumber(itemsCount)}</td>
+        <td class="cell-strong">${escapeHtml(fmtCurrency(totalRefund))}</td>
+        <td class="cell-muted">${escapeHtml(reason || '—')}</td>
+        <td class="cell-muted">${createdBy}</td>
+        <td class="cell-muted">${escapeHtml(fmtDateTime(r.createdAt))}</td>
         <td>
           <div class="table-actions">
             <button class="table-action-btn view" data-id="${r._id}" aria-label="${t('viewReturn', 'View return')}" title="${t('viewReturn', 'View return')}">
@@ -334,14 +334,13 @@ function bindToolbar() {
   if (to) to.addEventListener('change', () => { state.to = to.value; state.page = 1; refreshTable(); });
   const addBtn = document.getElementById('addReturnBtn');
   if (addBtn) addBtn.addEventListener('click', () => openNewReturnModal());
+  const emptyAdd = document.getElementById('emptyAddReturnBtn');
+  if (emptyAdd) emptyAdd.addEventListener('click', () => openNewReturnModal());
   const refresh = document.getElementById('returnRefreshBtn');
   if (refresh) refresh.addEventListener('click', () => refreshTable());
 }
 
 function bindTable() {
-  // Bound here (not bindToolbar) so the empty-state button survives every table refresh
-  const emptyAdd = document.getElementById('emptyAddReturnBtn');
-  if (emptyAdd) emptyAdd.addEventListener('click', () => openNewReturnModal());
   document.querySelectorAll('#returnsTableContainer .table-action-btn.view').forEach(b => {
     b.addEventListener('click', () => openViewReturnModal(b.dataset.id));
   });

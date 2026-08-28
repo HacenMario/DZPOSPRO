@@ -428,22 +428,6 @@
   gap: 0.5rem;
 }
 
-/* ============================================================
-   LAYOUT UTILITIES — grid
-   (base definitions; responsive overrides live in the media
-    query blocks below)
-   ============================================================ */
-.grid { display: grid; gap: 1rem; }
-.grid-2 { grid-template-columns: repeat(2, 1fr); }
-.grid-3 { grid-template-columns: repeat(3, 1fr); }
-.grid-4 { grid-template-columns: repeat(4, 1fr); }
-@media (max-width: 1024px) {
-  .grid-3, .grid-4 { grid-template-columns: repeat(2, 1fr); }
-}
-@media (max-width: 640px) {
-  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
-}
-
 
 /* ============================================================
    FORMS
@@ -1159,6 +1143,7 @@
   border-radius: var(--radius-sm);
 }
 
+.no-print { }
 .print-only { display: none; }
 @media print {
   .no-print { display: none !important; }
@@ -1314,7 +1299,7 @@
   .stat-label { font-size: 0.7rem; }
   .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; gap: 0.75rem; }
   .form-grid { grid-template-columns: 1fr; }
-  .form-row { gap: 0.5rem; }
+  .form-row { flex-direction: column; gap: 0.5rem; }
   .page-header { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
   .page-title { font-size: 1.1rem; }
   .page-subtitle { font-size: 0.78rem; }
@@ -1353,6 +1338,7 @@
   .stat-card { flex-direction: row; }
   .stat-icon { width: 44px; height: 44px; }
   .topbar { padding: 0 0.6rem; gap: 0.4rem; }
+  .topbar .header-actions { gap: 0.3rem; }
   .user-chip { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
   .user-chip .user-chip-name { display: none; }
   .lang-select { font-size: 0.75rem; padding: 0.25rem 0.4rem; }
@@ -1360,22 +1346,70 @@
   .content-area { padding: 0.5rem; }
   .page-title { font-size: 1rem; }
   .card-body { padding: 0.75rem; }
-  .table { font-size: 0.72rem; }
+  /* Tables → compact labelled cards.
+     The data-label attributes are injected automatically for every table
+     by dashboard.js (applyTableCardLabels), so each row becomes a clean
+     card: label on the inline-start, value on the inline-end. */
+  .table { font-size: 0.78rem; }
   .table thead { display: none; }
   .table, .table tbody, .table tr, .table td { display: block; width: 100%; }
-  .table tr { border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-bottom: 0.5rem; padding: 0.4rem; }
-  .table td { display: flex; justify-content: space-between; padding: 0.3rem 0; border: none; text-align: end; }
-  .table td::before { content: attr(data-label); font-weight: 600; text-align: start; padding-inline-end: 0.5rem; color: var(--text-secondary); }
-  .table-actions { justify-content: flex-end; }
+  .table tbody tr {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    margin-bottom: 0.6rem;
+    padding: 0.55rem 0.7rem;
+    background: var(--bg-card);
+    box-shadow: var(--shadow-sm);
+  }
+  .table tbody tr:last-child { margin-bottom: 0; }
+  .table td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.32rem 0;
+    border: none;
+    text-align: end;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .table td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    font-size: 0.72rem;
+    text-align: start;
+    padding-inline-end: 0.5rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  /* Cell content wraps inside the card instead of overflowing it */
+  .table td > * { max-width: 100%; }
+  .table .cell-strong { font-weight: 700; }
+  /* Long values (names, numbers) wrap instead of forcing the card wide */
+  .table td { overflow-wrap: anywhere; word-break: break-word; }
+  /* Thumbnails stay small inside cards */
+  .table .cell-thumb, .table .cell-thumb-placeholder { width: 36px; height: 36px; }
+  /* Actions row: keep the icon buttons inline and aligned to the end */
+  .table-actions { justify-content: flex-end; flex-wrap: wrap; width: 100%; }
+  .table-action-btn { width: 30px; height: 30px; }
   .btn { width: 100%; }
   .btn-sm { width: auto; }
   .toolbar-left .btn, .toolbar-right .btn { width: auto; }
   .modal-footer .btn { width: 100%; }
 }
 
+/* Phones between 481px and 768px: keep tables horizontally scrollable
+   (no card mode) but prevent the page itself from overflowing. */
+@media (min-width: 481px) and (max-width: 768px) {
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .table { min-width: 640px; }
+}
+
 /* Print improvements */
 @media print {
   .sidebar, .topbar, .hamburger, .page-actions, .toolbar, .pagination, .no-print { display: none !important; }
+  .main-content { margin: 0 !important; padding: 0 !important; }
   .content-area { padding: 0 !important; }
   body { background: #fff !important; }
 }
@@ -1449,4 +1483,100 @@
   .user-chip { padding: 0.25rem; }
   .user-chip .user-chip-name { display: none; }
   .lang-select { font-size: 0.78rem; padding: 0 0.45rem; height: 34px; }
+}
+
+/* ============================================================
+   TICKETS PAGE — receipt-style sale cards
+   ============================================================ */
+.tickets-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 0.9rem;
+}
+.ticket-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: box-shadow var(--transition), transform var(--transition);
+}
+.ticket-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
+.ticket-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.75rem 0.9rem 0.4rem;
+}
+.ticket-card .ticket-no {
+  font-family: var(--font-mono, monospace);
+  font-weight: 800;
+  font-size: 0.92rem;
+  color: var(--text-primary);
+  letter-spacing: 0.3px;
+}
+.ticket-card-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0 0.9rem 0.55rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+.ticket-card-meta .ticket-cust {
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 55%;
+}
+/* Perforated tear line (receipt look) */
+.ticket-card-perf {
+  display: flex;
+  gap: 6px;
+  padding: 0 0.9rem;
+  align-items: center;
+}
+.ticket-card-perf i {
+  flex: 1;
+  border-top: 2px dashed var(--border-color);
+  display: none;
+}
+.ticket-card-perf::before, .ticket-card-perf::after { content: ""; flex: 1; border-top: 2px dashed var(--border-color); }
+.ticket-card-perf i { display: block; }
+.ticket-card-body { padding: 0.55rem 0.9rem 0.7rem; display: flex; flex-direction: column; gap: 0.3rem; }
+.ticket-card-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+.ticket-card-row strong { color: var(--text-primary); font-weight: 700; }
+.ticket-card-row.total { font-size: 0.95rem; padding-top: 0.3rem; border-top: 1px dashed var(--border-color); margin-top: 0.2rem; }
+.ticket-card-row.total strong { color: var(--primary); font-weight: 800; }
+.ticket-card-actions {
+  margin-top: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.6rem 0.9rem 0.9rem;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-body);
+}
+.ticket-card-actions .btn { flex: 1 1 40%; display: inline-flex; align-items: center; justify-content: center; gap: 0.3rem; }
+.ticket-card-actions .btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+/* Return modal rows */
+.return-item-row:hover { background: var(--bg-hover); }
+
+@media (max-width: 640px) {
+  .tickets-grid { grid-template-columns: 1fr; }
+  .ticket-card-actions .btn { flex: 1 1 45%; }
+  .ticket-card-actions .btn span { display: none; }
+  .ticket-card-actions .btn svg { width: 16px; height: 16px; }
 }

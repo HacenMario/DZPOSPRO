@@ -47,24 +47,26 @@ const login = async (req, res, next) => {
     }
 };
 
-// POST /api/auth/register  (open registration — new users are ALWAYS cashiers)
+// POST /api/auth/register  (always open — new users can select role)
 const register = async (req, res, next) => {
     try {
-        const { name, email, password, phone } = req.body;
+        const { name, email, password, phone, role, settings } = req.body;
         const lang = req.lang || 'ar';
 
         const existing = await User.findOne({ email: { $regex: new RegExp('^' + (email || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i') } });
         if (existing) return errorResponse(res, 400, getTranslation('emailExists', lang));
 
-        // Client-supplied role/settings are intentionally ignored: public open
-        // registration must never grant admin/manager. Admins are created via
-        // POST /api/users (admin-only).
+        // Validate role (default to cashier if not provided or invalid)
+        const validRoles = ['admin', 'manager', 'cashier'];
+        const userRole = validRoles.includes(role) ? role : 'cashier';
+
         const user = new User({
             name,
             email: (email || '').trim(),
             password,
             phone: phone || '',
-            role: 'cashier'
+            role: userRole,
+            settings: settings || undefined
         });
         await user.save();
 
@@ -112,9 +114,7 @@ const updateProfile = async (req, res, next) => {
 // PUT /api/auth/change-password
 const changePassword = async (req, res, next) => {
     try {
-        const newPassword = req.body.newPassword;
-        // Tolerate both field names (frontend sends currentPassword)
-        const oldPassword = req.body.oldPassword || req.body.currentPassword;
+        const { oldPassword, newPassword } = req.body;
         const lang = req.lang || 'ar';
 
         if (!oldPassword || !newPassword) return errorResponse(res, 400, getTranslation('missingFields', lang));

@@ -15,14 +15,7 @@
   'use strict';
 
   // ===== استخدم API_BASE =====
-const API_BASE = (function () {
-    try {
-      const h = location.hostname;
-      const isLocal = (h === 'localhost' || h === '127.0.0.1' || h === '0.0.0.0' || location.protocol === 'file:');
-      if (isLocal) return '';
-    } catch (_) {}
-    return 'https://dzpospro-production.up.railway.app';
-  })();
+  const API_BASE = 'https://dzpospro-production.up.railway.app';
 
   let socket = null;
 

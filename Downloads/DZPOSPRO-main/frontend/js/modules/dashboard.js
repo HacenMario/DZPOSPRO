@@ -328,24 +328,12 @@ export async function renderDashboardPage() {
   const sevenDaysAgo = new Date(today); sevenDaysAgo.setDate(today.getDate() - 6);
   sevenDaysAgo.setHours(0, 0, 0, 0);
 
-  // Local day boundaries sent as absolute ISO instants (backend parseRange
-  // supports datetimes) — "today" then matches the merchant's clock, not the
-  // server's timezone. Date-only fallbacks below stay for safety.
-  const localIsoDay = (d) => d.getFullYear() + '-' +
-    String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-  const fmtDate = localIsoDay;
-
-  const endOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
-
-  let userRole = null;
-  try { userRole = JSON.parse(localStorage.getItem('user') || '{}').role; } catch (_) {}
-  const isCashier = userRole === 'cashier';
+  const fmtDate = (d) => d.toISOString().slice(0, 10);
 
   const [todayRes, weekRes, invRes, salesRes] = await Promise.allSettled([
-    apiFetch.get('/api/reports/summary', { from: startOfToday.toISOString(), to: endOfToday.toISOString() }),
+    apiFetch.get('/api/reports/summary', { from: fmtDate(startOfToday), to: fmtDate(today) }),
     apiFetch.get('/api/reports/summary', { from: fmtDate(sevenDaysAgo), to: fmtDate(today) }),
-    // cashier has no inventory permission -> endpoint 403s and toasts an error; skip it
-    isCashier ? null : apiFetch.get('/api/inventory/summary'),
+    apiFetch.get('/api/inventory/summary'),
     apiFetch.get('/api/sales', { page: 1, limit: 100 })
   ]);
 
@@ -388,10 +376,9 @@ export async function renderDashboardPage() {
     weekData.salesByDay.forEach(d => { dayMap[d.date] = d; });
   }
   for (let i = 6; i >= 0; i--) {
-    // Bucket by UTC day to match backend salesByDay keys exactly
-    const d = new Date(); d.setUTCHours(0, 0, 0, 0); d.setUTCDate(d.getUTCDate() - i);
+    const d = new Date(today); d.setDate(today.getDate() - i);
     const key = d.toISOString().slice(0, 10);
-    labels.push(d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', timeZone: 'UTC' }));
+    labels.push(d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' }));
     const entry = dayMap[key];
     counts.push(entry ? (entry.count || 0) : 0);
     revenues.push(entry ? (entry.revenue || 0) : 0);
@@ -410,9 +397,16 @@ export async function renderDashboardPage() {
   if (weekData && Array.isArray(weekData.salesByCategory) && weekData.salesByCategory.length) {
     catLabels = weekData.salesByCategory.map(c => c.name || c.category || '—');
     catData = weekData.salesByCategory.map(c => c.total || c.revenue || 0);
+  } else {
+    // Fallback: synthesize from low-stock products grouped by category
+    const catAgg = {};
+    (stats.lowStockProducts || []).forEach(p => {
+      const cat = (p.category && (p.category.displayName || (p.category.name && (p.category.name.ar || p.category.name.en)) || p.category.name)) || t('noParent', 'No parent');
+      catAgg[cat] = (catAgg[cat] || 0) + 1;
+    });
+    catLabels = Object.keys(catAgg);
+    catData = Object.values(catAgg);
   }
-  // No fallback: plotting low-stock counts as "sales by category" was misleading.
-  // When salesByCategory is empty the section is simply not rendered (catLabels stays []).
 
   content.innerHTML = `
     ${renderStatCards(stats)}

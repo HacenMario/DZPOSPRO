@@ -133,7 +133,7 @@ const getProducts = async (req, res, next) => {
 
         const filter = {};
         if (search) {
-            const r = new RegExp(String(search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+            const r = new RegExp(search, 'i');
             filter.$or = [
                 { 'name.ar': r }, { 'name.en': r }, { 'name.fr': r },
                 { 'description.ar': r }, { 'description.en': r }, { 'description.fr': r },
@@ -230,6 +230,10 @@ const updateProduct = async (req, res, next) => {
         }
 
         const oldImages = product.images || [];
+        const newSet = new Set(imagePaths);
+        oldImages.forEach(img => {
+            if (!newSet.has(img) && img.startsWith('/uploads/')) deleteImageFile(img);
+        });
 
         if (barcode && barcode !== product.barcode) {
             const dup = await Product.findOne({ barcode });
@@ -287,13 +291,6 @@ const updateProduct = async (req, res, next) => {
 
         product.updatedBy = req.userId;
         await product.save();
-
-        // Image cleanup runs only after validation + save succeeded, so a
-        // rejected update can no longer delete files that are still referenced.
-        const newSet = new Set(product.images || []);
-        oldImages.forEach(img => {
-            if (!newSet.has(img) && img.startsWith('/uploads/')) deleteImageFile(img);
-        });
 
         return successResponse(res, { product: decorate(product, lang) }, getTranslation('productUpdated', lang));
     } catch (err) {

@@ -90,15 +90,11 @@ const createMovement = async (req, res, next) => {
         const lang = req.lang || 'ar';
         const { product: productId, type, quantity, reason } = req.body;
 
-        if (!productId || !type || quantity === undefined) {
+        if (!productId || !type || !quantity) {
             return errorResponse(res, 400, getTranslation('missingFields', lang));
         }
         if (!['in', 'out', 'adjust'].includes(type)) {
             return errorResponse(res, 400, getTranslation('invalidMovementType', lang));
-        }
-        const qtyNum = Number(quantity);
-        if (!Number.isInteger(qtyNum) || qtyNum < 1) {
-            return errorResponse(res, 400, getTranslation('invalidData', lang));
         }
 
         // Transaction with fallback for standalone MongoDB (no replica set).
@@ -109,17 +105,14 @@ const createMovement = async (req, res, next) => {
             }
 
             let newStock = product.stock;
-            if (type === 'in') newStock += qtyNum;
+            if (type === 'in') newStock += Number(quantity);
             else if (type === 'out') {
-                if (product.stock < qtyNum) {
+                if (product.stock < Number(quantity)) {
                     throw Object.assign(new Error(getTranslation('insufficientStock', lang)), { statusCode: 400, expose: true });
                 }
-                newStock -= qtyNum;
+                newStock -= Number(quantity);
             } else if (type === 'adjust') {
-                if (qtyNum === product.stock) {
-                    throw Object.assign(new Error('No stock change — adjust value equals current stock'), { statusCode: 400, expose: true });
-                }
-                newStock = qtyNum; // absolute target
+                newStock = Number(quantity); // absolute target
             }
 
             const prev = product.stock;
@@ -129,7 +122,7 @@ const createMovement = async (req, res, next) => {
             const [mov] = await InventoryMovement.create([{
                 product: product._id,
                 type,
-                quantity: type === 'adjust' ? Math.abs(newStock - prev) : qtyNum,
+                quantity: type === 'adjust' ? Math.abs(newStock - prev) : Number(quantity),
                 previousStock: prev,
                 newStock: product.stock,
                 reason: {

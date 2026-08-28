@@ -5,7 +5,6 @@ const saleItemSchema = new mongoose.Schema({
     sale: { type: mongoose.Schema.Types.ObjectId, ref: 'Sale', default: null },
     product: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
     quantity: { type: Number, required: true, min: 1 },
-    returnedQuantity: { type: Number, default: 0, min: 0 },  // cumulative qty returned across return requests
     price: { type: Number, required: true, min: 0 },   // unit price at sale time
     discount: { type: Number, default: 0, min: 0 },
     total: { type: Number, required: true, min: 0 },

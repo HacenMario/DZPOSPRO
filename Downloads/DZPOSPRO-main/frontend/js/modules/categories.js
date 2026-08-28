@@ -91,11 +91,11 @@ function renderTable() {
     const idx = (state.page - 1) * state.limit + i + 1;
     return `
       <tr>
-        <td class="cell-muted" data-label="#">${idx}</td>
-        <td class="cell-strong" data-label="${t('name', 'Name')}">${escapeHtml(name)}</td>
-        <td class="cell-muted" data-label="${t('description', 'Description')}">${escapeHtml(desc)}</td>
-        <td data-label="${t('parentCategory', 'Parent category')}">${escapeHtml(parent)}</td>
-        <td data-label="${t('status', 'Status')}">${statusBadge}</td>
+        <td class="cell-muted">${idx}</td>
+        <td class="cell-strong">${escapeHtml(name)}</td>
+        <td class="cell-muted">${escapeHtml(desc)}</td>
+        <td>${escapeHtml(parent)}</td>
+        <td>${statusBadge}</td>
         <td>
           <div class="table-actions">
             <button class="table-action-btn edit" data-id="${c._id}" aria-label="${t('edit', 'Edit')}" title="${t('edit', 'Edit')}">
@@ -129,7 +129,6 @@ function renderTable() {
             <th>#</th>
             <th>${t('name', 'Name')}</th>
             <th>${t('description', 'Description')}</th>
-            <th>${t('parentCategory', 'Parent category')}</th>
             <th>${t('status', 'Status')}</th>
             <th>${t('actions', 'Actions')}</th>
           </tr>
@@ -184,14 +183,13 @@ function bindToolbar() {
   }
   const addBtn = document.getElementById('addCategoryBtn');
   if (addBtn) addBtn.addEventListener('click', () => openCategoryModal(null));
+  const emptyAdd = document.getElementById('emptyAddCatBtn');
+  if (emptyAdd) emptyAdd.addEventListener('click', () => openCategoryModal(null));
   const refresh = document.getElementById('categoryRefreshBtn');
   if (refresh) refresh.addEventListener('click', () => refreshTable());
 }
 
 function bindTable() {
-  // Bound here (not bindToolbar) so the empty-state button survives every table refresh
-  const emptyAdd = document.getElementById('emptyAddCatBtn');
-  if (emptyAdd) emptyAdd.addEventListener('click', () => openCategoryModal(null));
   document.querySelectorAll('#categoriesTableContainer .table-action-btn.edit').forEach(b => {
     b.addEventListener('click', () => {
       const c = state.items.find(x => x._id === b.dataset.id);
@@ -293,11 +291,6 @@ async function openCategoryModal(category) {
                 placeholder="${escapeHtml(t('descriptionPlaceholder', 'Optional category description'))}">${category ? escapeHtml(category.displayDescription || (category.description && (category.description.ar || category.description.en || category.description.fr)) || '') : ''}</textarea>
             </div>
 
-            <div class="form-row">
-              <div class="form-group">
-                <label class="form-label">${t('parentCategory', 'Parent category')}</label>
-                <select class="select" id="catParent">${parentOpts}</select>
-              </div>
               <div class="form-group">
                 <label class="form-label">${t('status', 'Status')}</label>
                 <select class="select" id="catIsActive">

@@ -51,16 +51,11 @@ const getCurrentSession = async (req, res, next) => {
         if (session) {
             const sales = await Sale.find({ session: session._id, status: 'completed' });
             const totalSales = sales.reduce((s, x) => s + x.total, 0);
-            const totalDiscount = sales.reduce((s, x) => s + (x.discount || 0) + (x.couponDiscount || 0), 0);
+            const totalDiscount = sales.reduce((s, x) => s + (x.discount || 0), 0);
             const saleCount = sales.length;
-            // Direct-method sums plus the split-payment parts ('split' sales are
-            // invisible to the paymentMethod filters above).
-            const cashSales = sales.filter(s => s.paymentMethod === 'cash').reduce((s, x) => s + x.total, 0)
-                + sales.filter(s => s.paymentMethod === 'split').reduce((s, x) => s + (x.splitPayment?.cash || 0), 0);
-            const cardSales = sales.filter(s => s.paymentMethod === 'card').reduce((s, x) => s + x.total, 0)
-                + sales.filter(s => s.paymentMethod === 'split').reduce((s, x) => s + (x.splitPayment?.card || 0), 0);
-            const transferSales = sales.filter(s => s.paymentMethod === 'transfer').reduce((s, x) => s + x.total, 0)
-                + sales.filter(s => s.paymentMethod === 'split').reduce((s, x) => s + (x.splitPayment?.transfer || 0), 0);
+            const cashSales = sales.filter(s => s.paymentMethod === 'cash').reduce((s, x) => s + x.total, 0);
+            const cardSales = sales.filter(s => s.paymentMethod === 'card').reduce((s, x) => s + x.total, 0);
+            const transferSales = sales.filter(s => s.paymentMethod === 'transfer').reduce((s, x) => s + x.total, 0);
             stats = {
                 totalSales, totalDiscount, saleCount, cashSales, cardSales, transferSales,
                 expectedCash: (session.openingBalance || 0) + cashSales
@@ -83,30 +78,20 @@ const closeSession = async (req, res, next) => {
         if (!session) return errorResponse(res, 404, getTranslation('sessionNotFound', lang));
         if (session.status === 'closed') return errorResponse(res, 400, getTranslation('sessionNotFound', lang));
 
-        // Only the owning user (or an admin/manager) may close a session.
-        if (String(session.user) !== String(req.userId) && !['admin', 'manager'].includes(req.userRole || '')) {
-            return errorResponse(res, 403, getTranslation('forbidden', lang));
-        }
-
         const sales = await Sale.find({ session: session._id, status: 'completed' });
         const totalSales = sales.reduce((s, x) => s + x.total, 0);
-        const totalDiscount = sales.reduce((s, x) => s + (x.discount || 0) + (x.couponDiscount || 0), 0);
+        const totalDiscount = sales.reduce((s, x) => s + (x.discount || 0), 0);
         const totalTax = sales.reduce((s, x) => s + (x.tax || 0), 0);
         const saleCount = sales.length;
-        // Direct-method sums plus the split-payment parts ('split' sales are
-        // invisible to the paymentMethod filters above).
-        const cashSales = sales.filter(s => s.paymentMethod === 'cash').reduce((s, x) => s + x.total, 0)
-            + sales.filter(s => s.paymentMethod === 'split').reduce((s, x) => s + (x.splitPayment?.cash || 0), 0);
-        const cardSales = sales.filter(s => s.paymentMethod === 'card').reduce((s, x) => s + x.total, 0)
-            + sales.filter(s => s.paymentMethod === 'split').reduce((s, x) => s + (x.splitPayment?.card || 0), 0);
-        const transferSales = sales.filter(s => s.paymentMethod === 'transfer').reduce((s, x) => s + x.total, 0)
-            + sales.filter(s => s.paymentMethod === 'split').reduce((s, x) => s + (x.splitPayment?.transfer || 0), 0);
+        const cashSales = sales.filter(s => s.paymentMethod === 'cash').reduce((s, x) => s + x.total, 0);
+        const cardSales = sales.filter(s => s.paymentMethod === 'card').reduce((s, x) => s + x.total, 0);
+        const transferSales = sales.filter(s => s.paymentMethod === 'transfer').reduce((s, x) => s + x.total, 0);
 
         const expectedCash = (session.openingBalance || 0) + cashSales;
         const actualCash = parseFloat(closingCash) || 0;
         const difference = actualCash - expectedCash;
 
-        session.closingBalance = actualCash;
+        session.closingBalance = totalSales;
         session.totalSales = totalSales;
         session.totalDiscount = totalDiscount;
         session.totalTax = totalTax;
@@ -172,17 +157,12 @@ const getSessionById = async (req, res, next) => {
             .sort({ saleDate: -1 });
 
         const totalSales = sales.reduce((s, x) => s + x.total, 0);
-        const totalDiscount = sales.reduce((s, x) => s + (x.discount || 0) + (x.couponDiscount || 0), 0);
+        const totalDiscount = sales.reduce((s, x) => s + (x.discount || 0), 0);
         const totalTax = sales.reduce((s, x) => s + (x.tax || 0), 0);
         const saleCount = sales.length;
-        // Direct-method sums plus the split-payment parts ('split' sales are
-        // invisible to the paymentMethod filters above).
-        const cashSales = sales.filter(s => s.paymentMethod === 'cash').reduce((s, x) => s + x.total, 0)
-            + sales.filter(s => s.paymentMethod === 'split').reduce((s, x) => s + (x.splitPayment?.cash || 0), 0);
-        const cardSales = sales.filter(s => s.paymentMethod === 'card').reduce((s, x) => s + x.total, 0)
-            + sales.filter(s => s.paymentMethod === 'split').reduce((s, x) => s + (x.splitPayment?.card || 0), 0);
-        const transferSales = sales.filter(s => s.paymentMethod === 'transfer').reduce((s, x) => s + x.total, 0)
-            + sales.filter(s => s.paymentMethod === 'split').reduce((s, x) => s + (x.splitPayment?.transfer || 0), 0);
+        const cashSales = sales.filter(s => s.paymentMethod === 'cash').reduce((s, x) => s + x.total, 0);
+        const cardSales = sales.filter(s => s.paymentMethod === 'card').reduce((s, x) => s + x.total, 0);
+        const transferSales = sales.filter(s => s.paymentMethod === 'transfer').reduce((s, x) => s + x.total, 0);
         const expectedCash = (session.openingBalance || 0) + cashSales;
 
         const summary = session.status === 'closed'

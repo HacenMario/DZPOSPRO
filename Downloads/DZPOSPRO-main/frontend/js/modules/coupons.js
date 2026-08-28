@@ -196,18 +196,18 @@ function renderTable() {
     const idx = (state.page - 1) * state.limit + i + 1;
     return `
       <tr>
-        <td class="cell-muted" data-label="#">${idx}</td>
-        <td class="cell-strong" data-label="${t('couponCode', 'Code')}" style="font-family:var(--font-mono, monospace);">${escapeHtml(c.code || '—')}</td>
-        <td class="cell-muted" data-label="${t('description', 'Description')}">${escapeHtml(desc || '—')}</td>
-        <td data-label="${t('type', 'Type')}">${typeBadge}</td>
-        <td class="cell-strong" data-label="${t('couponValue', 'Value')}">${escapeHtml(fmtValue(c))}</td>
-        <td data-label="${t('minPurchase', 'Min order')}">${(c.minOrder != null && Number(c.minOrder) > 0) ? escapeHtml(fmtCurrency(c.minOrder)) : '—'}</td>
-        <td data-label="${t('usage', 'Usage')}">${escapeHtml(fmtUsage(c))}</td>
-        <td class="cell-muted" data-label="${t('validity', 'Validity')}">
-          <span dir="ltr">${fmtDate(c.validFrom)} → ${fmtDate(c.validUntil)}</span>
+        <td class="cell-muted">${idx}</td>
+        <td class="cell-strong" style="font-family:var(--font-mono, monospace);">${escapeHtml(c.code || '—')}</td>
+        <td class="cell-muted">${escapeHtml(desc || '—')}</td>
+        <td>${typeBadge}</td>
+        <td class="cell-strong">${escapeHtml(fmtValue(c))}</td>
+        <td>${(c.minOrder != null && Number(c.minOrder) > 0) ? escapeHtml(fmtCurrency(c.minOrder)) : '—'}</td>
+        <td>${escapeHtml(fmtUsage(c))}</td>
+        <td class="cell-muted">
+          ${fmtDate(c.validFrom)} <span class="text-muted">→</span> ${fmtDate(c.validUntil)}
           ${expired ? '<div><span class="badge badge-danger" style="margin-top:2px;">' + t('expired', 'Expired') + '</span></div>' : ''}
         </td>
-        <td data-label="${t('status', 'Status')}">${statusBadge}</td>
+        <td>${statusBadge}</td>
         <td>
           <div class="table-actions">
             <button class="table-action-btn edit" data-id="${c._id}" aria-label="${t('edit', 'Edit')}" title="${t('edit', 'Edit')}">

@@ -29,7 +29,7 @@ const PORT = parseInt(process.env.PORT, 10) || 3001;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
 // CORS allow-list (never '*' with credentials)
-const corsOrigins = (process.env.CORS_ORIGINS || 'https://dzpospro-production.up.railway.app,https://dzpospro.vercel.app,http://localhost:3001,http://127.0.0.1:3001')
+const corsOrigins = (process.env.CORS_ORIGINS || 'dzpospro-production.up.railway.app,https://dzpospro.vercel.app,https://dzpospro.vercel.app')
     .split(',')
     .map(s => s.trim())
     .filter(Boolean);
@@ -118,6 +118,37 @@ app.get('/api', (req, res) => {
     });
 });
 
+// ===== مسار التسجيل =====
+app.post('/api/register', async (req, res) => {
+    try {
+        const { name, email, password, role } = req.body;
+        
+        // تحقق من وجود جميع الحقول
+        if (!name || !email || !password) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'جميع الحقول مطلوبة' 
+            });
+        }
+
+        // هنا أضف منطق التسجيل الخاص بك
+        // مثال: التحقق من وجود المستخدم، تشفير كلمة المرور، حفظ في قاعدة البيانات
+        
+        // استجابة نجاح
+        res.status(201).json({ 
+            success: true, 
+            message: 'تم إنشاء الحساب بنجاح' 
+        });
+        
+    } catch (error) {
+        console.error('Error in register:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'حدث خطأ في الخادم' 
+        });
+    }
+});
+
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/products', require('./routes/products'));
@@ -185,17 +216,6 @@ global.broadcastNotification = (notification) => {
 // ----- boot -----
 (async () => {
     try {
-        // Fail fast on missing critical configuration — a server that boots
-        // without these can never authenticate or serve data.
-        if (!process.env.JWT_SECRET) {
-            logger.error('FATAL: JWT_SECRET is not set. Refusing to start.');
-            process.exit(1);
-        }
-        if (!process.env.MONGO_URI) {
-            logger.error('FATAL: MONGO_URI is not set. Refusing to start.');
-            process.exit(1);
-        }
-
         await connectDB();
     } catch (e) {
         logger.warn(`DB unavailable at boot — continuing without it: ${e.message}`);

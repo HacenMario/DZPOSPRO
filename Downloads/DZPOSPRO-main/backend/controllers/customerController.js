@@ -17,22 +17,20 @@ const decorate = (c, lang) => {
 // the string out across all three language slots. Object inputs are passed through.
 const fanOutString = (val) => (typeof val === 'string') ? { ar: val, en: val, fr: val } : val;
 
-// GET /api/customers?page&limit&search&status
+// GET /api/customers?page&limit&search
 const getCustomers = async (req, res, next) => {
     try {
         const lang = req.lang || 'ar';
         const { page, limit, skip } = parsePagination(req.query);
-        const { search, status } = req.query;
+        const { search } = req.query;
         const filter = {};
         if (search) {
-            const r = new RegExp(String(search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+            const r = new RegExp(search, 'i');
             filter.$or = [
                 { 'name.ar': r }, { 'name.en': r }, { 'name.fr': r },
                 { phone: r }, { email: r }
             ];
         }
-        if (status === 'active') filter.isActive = true;
-        else if (status === 'inactive') filter.isActive = false;
         const [docs, total] = await Promise.all([
             Customer.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
             Customer.countDocuments(filter)

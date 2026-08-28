@@ -166,15 +166,15 @@ function renderTable() {
     const st = statusBadge(po.status);
     return `
       <tr>
-        <td class="cell-muted" data-label="#">${idx}</td>
-        <td class="cell-strong" data-label="${t('orderNumber', 'Order #')}">
+        <td class="cell-muted">${idx}</td>
+        <td class="cell-strong">
           <a href="#" class="po-link" data-id="${po._id}" style="color:inherit;text-decoration:underline;">${num}</a>
         </td>
-        <td data-label="${t('date', 'Date')}"><span dir="ltr">${date}</span></td>
-        <td data-label="${t('supplier', 'Supplier')}">${sup}</td>
-        <td data-label="${t('itemsCount', 'Items')}">${itemCount}</td>
-        <td class="cell-strong" data-label="${t('total', 'Total')}">${total}</td>
-        <td data-label="${t('status', 'Status')}">${st}</td>
+        <td>${date}</td>
+        <td>${sup}</td>
+        <td>${itemCount}</td>
+        <td class="cell-strong">${total}</td>
+        <td>${st}</td>
         <td>
           <div class="table-actions">
             <button class="table-action-btn view" data-id="${po._id}" aria-label="${t('view', 'View')}" title="${t('view', 'View')}">

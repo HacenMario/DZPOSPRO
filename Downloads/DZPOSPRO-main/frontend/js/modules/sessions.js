@@ -243,15 +243,15 @@ function renderTable() {
     const diff = s.status === 'closed' ? differenceCell(s.difference) : '—';
     return `
       <tr>
-        <td class="cell-muted" data-label="#">${idx}</td>
-        <td class="cell-strong" data-label="${t('sessionId', 'Session')}">#${escapeHtml(sessionIdShort(s))}</td>
-        <td data-label="${t('cashier', 'Cashier')}">${escapeHtml(cashier)}</td>
-        <td class="cell-muted" data-label="${t('openedAt', 'Opened')}"><span dir="ltr">${escapeHtml(fmtDateTime(s.openedAt))}</span></td>
-        <td data-label="${t('closedAt', 'Closed')}">${s.status === 'closed' ? '<span dir=\'ltr\'>' + escapeHtml(fmtDateTime(s.closedAt)) + '</span>' : closingTime}</td>
-        <td data-label="${t('openingCash', 'Opening cash')}">${fmtCurrency(s.openingBalance)}</td>
-        <td data-label="${t('closingCash', 'Closing cash')}">${closingCash}</td>
-        <td data-label="${t('difference', 'Difference')}">${diff}</td>
-        <td data-label="${t('status', 'Status')}">${statusBadge(s.status)}</td>
+        <td class="cell-muted">${idx}</td>
+        <td class="cell-strong">#${escapeHtml(sessionIdShort(s))}</td>
+        <td>${escapeHtml(cashier)}</td>
+        <td class="cell-muted">${escapeHtml(fmtDateTime(s.openedAt))}</td>
+        <td>${closingTime}</td>
+        <td>${fmtCurrency(s.openingBalance)}</td>
+        <td>${closingCash}</td>
+        <td>${diff}</td>
+        <td>${statusBadge(s.status)}</td>
         <td>
           <div class="table-actions">
             <button class="table-action-btn view" data-id="${s._id}" aria-label="${t('view', 'View')}" title="${t('view', 'View')}">
@@ -682,7 +682,7 @@ function renderSessionDetail(s, sales, summary) {
     return `
       <tr>
         <td class="cell-strong">${escapeHtml(sv.saleNumber || sv.invoiceNumber || '—')}</td>
-        <td class="cell-muted"><span dir="ltr">${escapeHtml(fmtDateTime(sv.saleDate || sv.createdAt))}</span></td>
+        <td class="cell-muted">${escapeHtml(fmtDateTime(sv.saleDate || sv.createdAt))}</td>
         <td>${escapeHtml(sv.paymentMethod || '—')}</td>
         <td class="cell-strong">${fmtCurrency(sv.total)}</td>
         <td>${statusBadge(sv.status)}</td>
@@ -929,7 +929,7 @@ function printSessionReport(s, salesArr, summary) {
   const salesRows = (salesArr || []).map(sv => `
     <tr>
       <td>${escapeHtml(sv.saleNumber || sv.invoiceNumber || '—')}</td>
-      <td><span dir="ltr">${escapeHtml(fmtDateTime(sv.saleDate || sv.createdAt))}</span></td>
+      <td>${escapeHtml(fmtDateTime(sv.saleDate || sv.createdAt))}</td>
       <td>${escapeHtml(sv.paymentMethod || '—')}</td>
       <td style="text-align:right;">${escapeHtml(fmtCurrency(sv.total))}</td>
       <td>${escapeHtml(sv.status || '—')}</td>

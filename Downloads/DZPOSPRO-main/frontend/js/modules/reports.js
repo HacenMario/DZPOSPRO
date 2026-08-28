@@ -838,22 +838,6 @@ function exportPDF() {
 
     const s = state.summary || {};
     const storeName = (state.settings && (state.settings.storeName || state.settings.name)) || t('appName', 'DZ POS PRO');
-
-    // jsPDF core fonts cannot render Arabic (garbled output) — keep the vector
-    // path for Latin data only; when Arabic data is present use the browser
-    // print dialog instead (choose "Save as PDF").
-    const hasArabic = /[\u0600-\u06FF]/.test(
-      [String(storeName)]
-        .concat((state.productsReport || []).map(p => String(p.name || '')))
-        .concat((state.customersReport || []).map(c => String(c.name || '')))
-        .join(' ')
-    );
-    if (hasArabic) {
-      if (window.Toast) window.Toast.info(t('pdfArabicFallback', 'Arabic text detected — opening the print dialog instead (choose "Save as PDF")'));
-      window.print();
-      return;
-    }
-
     const doc = new JsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' });
     const W = doc.internal.pageSize.getWidth();
     const M = 40;

@@ -28,9 +28,7 @@ const registerValidation = [
     body('name').trim().isLength({ min: 2 }).withMessage('Name must be at least 2 characters'),
     body('email').trim().isLength({ min: 1 }).withMessage('Email is required'),
     body('password')
-        .isLength({ min: 8 }).withMessage('Password must be at least 8 characters')
-        .matches(/[A-Za-z]/).withMessage('Password must contain a letter')
-        .matches(/[0-9]/).withMessage('Password must contain a number'),
+        .isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
     body('role').optional().isIn(['admin', 'manager', 'cashier']).withMessage('Invalid role'),
     validate
 ];
@@ -47,12 +45,6 @@ const changePasswordValidation = [
 // ---- Generic ----
 const idParamValidation = [
     param('id').isMongoId().withMessage('Invalid id'),
-    validate
-];
-
-// For routes whose path param is named :productId (e.g. /api/inventory/product/:productId)
-const productIdParamValidation = [
-    param('productId').isMongoId().withMessage('Invalid id'),
     validate
 ];
 
@@ -120,7 +112,6 @@ module.exports = {
     registerValidation,
     changePasswordValidation,
     idParamValidation,
-    productIdParamValidation,
     paginationValidation,
     productValidation,
     categoryValidation,

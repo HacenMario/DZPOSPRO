@@ -7,22 +7,18 @@ const { getTranslation } = require('../config/i18n');
 const logger = require('../utils/logger');
 const { successResponse, errorResponse } = require('../utils/response');
 
-const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
-
-// Date-only strings (YYYY-MM-DD) are interpreted as UTC instants so ranges are
-// identical regardless of the server's local timezone: `from` → UTC midnight,
-// `to` → end of that UTC day. Full ISO datetime strings parse as absolute instants.
-const parseInstant = (value, endOfDay = false) => {
-    if (DATE_ONLY.test(value)) {
-        return new Date(endOfDay ? `${value}T23:59:59.999Z` : `${value}T00:00:00.000Z`);
-    }
-    return new Date(value); // full ISO datetime — absolute instant
-};
-
 const parseRange = (query) => {
     const now = new Date();
-    const from = query.from ? parseInstant(query.from) : new Date(now.getFullYear(), now.getMonth(), 1);
-    const to = query.to ? parseInstant(query.to, true) : new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const from = query.from ? new Date(query.from) : new Date(now.getFullYear(), now.getMonth(), 1);
+    let to = query.to ? new Date(query.to) : new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    // If `to` was provided as a date-only string (midnight), advance to end of that day
+    // so the $lt query includes the entire day.
+    if (query.to) {
+        const parsed = new Date(query.to);
+        if (parsed.getHours() === 0 && parsed.getMinutes() === 0 && parsed.getSeconds() === 0 && parsed.getMilliseconds() === 0) {
+            to = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), 23, 59, 59, 999);
+        }
+    }
     return { from, to };
 };
 
@@ -165,11 +161,9 @@ const getSalesReport = async (req, res, next) => {
         const sales = await Sale.find({ saleDate: { $gte: from, $lt: to }, status: 'completed' });
         const buckets = {};
         sales.forEach(s => {
-            // Bucket keys are always UTC so day/month grouping matches the
-            // UTC date-range filtering above.
             const d = s.saleDate;
             const key = groupBy === 'month'
-                ? d.toISOString().slice(0, 7)
+                ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
                 : d.toISOString().slice(0, 10);
             if (!buckets[key]) buckets[key] = { label: key, count: 0, revenue: 0 };
             buckets[key].count += 1;

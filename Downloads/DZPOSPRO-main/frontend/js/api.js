@@ -15,14 +15,7 @@
   'use strict';
 
   // ===== استخدم API_BASE من config.js =====
-const API_BASE = (function () {
-    try {
-      const h = location.hostname;
-      const isLocal = (h === 'localhost' || h === '127.0.0.1' || h === '0.0.0.0' || location.protocol === 'file:');
-      if (isLocal) return '';
-    } catch (_) {}
-    return 'https://dzpospro-production.up.railway.app';
-  })();
+  const API_BASE = 'https://dzpospro-production.up.railway.app';
 
   function getToken() {
     try { return localStorage.getItem('token'); } catch { return null; }
@@ -144,5 +137,21 @@ const API_BASE = (function () {
   apiFetch.patch  = (url, b, o) => apiFetch(url, Object.assign({ method: 'PATCH',  body: b }, o || {}));
   apiFetch.delete = (url, o)    => apiFetch(url, Object.assign({ method: 'DELETE' }, o || {}));
 
+  /**
+   * Resolve a backend asset path (e.g. "/uploads/1698-123.jpg") to an
+   * absolute URL. The backend stores RELATIVE paths, so when the frontend
+   * is served from a different origin (Vercel) a bare <img src="/uploads/…">
+   * resolves to the FRONTEND origin and shows a broken-image icon.
+   * Prefixing with API_BASE fixes product images everywhere.
+   */
+  function resolveAssetUrl(path) {
+    if (!path || typeof path !== 'string') return '';
+    if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:')) return path;
+    if (path.startsWith('/uploads/')) return API_BASE + path;
+    return path;
+  }
+
+  apiFetch.resolveAssetUrl = resolveAssetUrl;
   global.apiFetch = apiFetch;
+  global.resolveAssetUrl = resolveAssetUrl;
 })(window);

@@ -329,6 +329,7 @@ const POS_CSS = `
 }
 .pos-cart-fab:hover { transform: translateY(-2px); }
 .pos-cart-fab:active { transform: translateY(0); }
+.pos-cart-fab.has-items { animation: posFabPulse 2s infinite; }
 .pos-cart-fab .fab-badge {
   background: rgba(255,255,255,0.25);
   border-radius: var(--radius-full);
@@ -363,6 +364,60 @@ const POS_CSS = `
     z-index: 100;
   }
   .pos-cart-backdrop.show { display: block; }
+}
+
+/* ---- Mobile: customer-first bar ----
+ * On phones the customer selector lived INSIDE the cart drawer, so the
+ * sale flow was: open cart → pick customer → close cart → add products →
+ * re-open cart → pay. The bar below surfaces "select customer" as
+ * STEP 1 on the main POS screen (above the product grid), matching the
+ * desktop flow — no cart detour needed anymore. */
+.pos-customer-bar {
+  display: none;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.65rem 0.85rem 0;
+  padding: 0.6rem 0.8rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+.pos-customer-bar .pos-cb-step {
+  width: 26px; height: 26px;
+  flex-shrink: 0;
+  display: grid; place-items: center;
+  background: var(--primary);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 800;
+  border-radius: var(--radius-full);
+}
+.pos-customer-bar .pos-cb-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.pos-customer-bar .pos-cb-label { font-size: 0.68rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; }
+.pos-customer-bar .pos-cb-name { font-size: 0.86rem; font-weight: 700; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pos-customer-bar .pos-cb-btn {
+  flex-shrink: 0;
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  padding: 0.45rem 0.85rem;
+  background: var(--primary-light);
+  color: var(--primary-dark);
+  font-size: 0.78rem; font-weight: 700;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+}
+.pos-customer-bar .pos-cb-btn svg { width: 14px; height: 14px; }
+[data-theme="dark"] .pos-customer-bar .pos-cb-btn { color: var(--primary); }
+.pos-customer-bar.is-set { border-color: rgba(var(--primary-rgb), 0.45); }
+.pos-customer-bar.is-set .pos-cb-step { background: var(--success); }
+@media (max-width: 1024px) {
+  .pos-customer-bar { display: flex; }
+}
+
+@keyframes posFabPulse {
+  0% { box-shadow: var(--shadow-lg), 0 0 0 0 rgba(var(--primary-rgb), 0.45); }
+  70% { box-shadow: var(--shadow-lg), 0 0 0 12px rgba(var(--primary-rgb), 0); }
+  100% { box-shadow: var(--shadow-lg), 0 0 0 0 rgba(var(--primary-rgb), 0); }
 }
 
 .pos-panel {
@@ -958,6 +1013,158 @@ const POS_CSS = `
 @media (min-width: 1025px) {
   .pos-right { position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow-y: auto; }
 }
+
+/* ============================================================
+   POS UX REDESIGN — mobile-first improvements
+   ============================================================ */
+
+/* ---- Mobile customer bar: selecting the customer is the FIRST step,
+   reachable without opening the cart drawer (mirrors desktop) ---- */
+.pos-mobile-custbar {
+  display: none;
+}
+@media (max-width: 1024px) {
+  .pos-mobile-custbar {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin: 0.75rem 1rem 0 1rem;
+    padding: 0.7rem 0.9rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .pos-mobile-custbar .custbar-icon {
+    width: 38px; height: 38px;
+    flex-shrink: 0;
+    display: grid; place-items: center;
+    border-radius: 50%;
+    background: var(--primary-light);
+    color: var(--primary-dark);
+  }
+  .pos-mobile-custbar .custbar-icon svg { width: 20px; height: 20px; }
+  .pos-mobile-custbar .custbar-texts { min-width: 0; flex: 1; }
+  .pos-mobile-custbar .custbar-label {
+    font-size: 0.68rem; font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.4px;
+  }
+  .pos-mobile-custbar .custbar-name {
+    font-size: 0.9rem; font-weight: 700;
+    color: var(--text-primary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .pos-mobile-custbar .custbar-chev { color: var(--text-muted); flex-shrink: 0; }
+  .pos-mobile-custbar .custbar-chev svg { width: 18px; height: 18px; }
+  .pos-mobile-custbar.step-pulse { animation: custbarPulse 1.2s ease-in-out 3; border-color: var(--primary); }
+}
+@keyframes custbarPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(var(--primary-rgb), 0.35); }
+  50% { box-shadow: 0 0 0 8px rgba(var(--primary-rgb), 0); }
+}
+
+/* ---- Mobile sticky summary bar (items + total + open cart) ---- */
+.pos-mobile-summary {
+  display: none;
+}
+@media (max-width: 1024px) {
+  .pos-mobile-summary {
+    display: flex;
+    position: sticky;
+    bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+    z-index: 99;
+    margin: 0.75rem 1rem;
+    padding: 0.65rem 0.9rem;
+    align-items: center;
+    gap: 0.75rem;
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-full);
+    box-shadow: var(--shadow-lg);
+    cursor: pointer;
+    width: calc(100% - 2rem);
+    font: inherit;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .pos-mobile-summary .sum-texts { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; flex: 1; }
+  .pos-mobile-summary .sum-items { font-size: 0.72rem; font-weight: 600; opacity: 0.85; }
+  .pos-mobile-summary .sum-total { font-size: 1rem; font-weight: 800; line-height: 1.2; }
+  .pos-mobile-summary .sum-cta {
+    flex-shrink: 0;
+    background: rgba(255,255,255,0.22);
+    border-radius: var(--radius-full);
+    padding: 0.4rem 0.9rem;
+    font-size: 0.82rem;
+    font-weight: 700;
+    display: inline-flex; align-items: center; gap: 0.35rem;
+  }
+  .pos-mobile-summary .sum-cta svg { width: 16px; height: 16px; }
+  .pos-mobile-summary.has-items { animation: posFabPulse 2s infinite; }
+  /* Hide the old FAB when the richer summary bar is present */
+  .pos-cart-fab { display: none !important; }
+}
+
+/* ---- Product cards: bigger touch targets + quick-add badge ---- */
+@media (max-width: 1024px) {
+  .pos-product { padding: 0.55rem; border-radius: var(--radius); }
+  .pos-product-name { font-size: 0.8rem; }
+  .pos-product-price { font-size: 0.95rem; }
+  .pos-grid { gap: 0.55rem; padding: 0.75rem; }
+}
+.pos-product .pos-add-hint {
+  position: absolute;
+  top: 0.45rem;
+  inset-inline-end: 0.45rem;
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  display: grid; place-items: center;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: all 0.15s;
+  box-shadow: 0 2px 8px rgba(var(--primary-rgb), 0.4);
+}
+.pos-product .pos-add-hint svg { width: 15px; height: 15px; }
+.pos-product:hover .pos-add-hint, .pos-product:focus-visible .pos-add-hint { opacity: 1; transform: scale(1); }
+@media (max-width: 1024px) {
+  .pos-product .pos-add-hint { opacity: 1; transform: scale(1); width: 24px; height: 24px; }
+}
+
+/* ---- Cart drawer: customer row emphasized as step 1 ---- */
+.pos-customer-row { position: relative; }
+@media (max-width: 1024px) {
+  .pos-right.open .pos-customer-row { background: var(--primary-light); }
+  .pos-cart-header h3 { font-size: 0.95rem; }
+}
+.pos-step-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px; height: 20px;
+  padding: 0 5px;
+  border-radius: var(--radius-full);
+  background: var(--primary);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+/* ---- Touch-friendly cart quantity buttons on phones ---- */
+@media (max-width: 768px) {
+  .pos-qty button { min-width: 40px; min-height: 40px; font-size: 1.15rem; }
+  .pos-qty input { min-height: 40px; }
+  .pos-cart-item-remove { min-width: 40px; min-height: 40px; }
+  .pos-quickcash-btn { min-height: 40px; }
+  .pos-pay-method { padding: 0.55rem 0.4rem; font-size: 0.78rem; }
+  .pos-actions-row { gap: 0.4rem; }
+  .pos-actions-row .btn { padding: 0.6rem 0.5rem; }
+}
 </style>
 `;
 
@@ -1026,6 +1233,15 @@ function renderSkeleton() {
 
 function renderLayout() {
   return POS_CSS + `
+    <!-- Mobile: STEP 1 — select customer BEFORE opening the cart -->
+    <div class="pos-customer-bar ${state.selectedCustomerId ? 'is-set' : ''}" id="posCustomerBar">
+      <span class="pos-cb-step" id="posCbStep">1</span>
+      <span class="pos-cb-info">
+        <span class="pos-cb-label">${escapeHtml(t('stepSelectCustomer', 'Step 1 — customer'))}</span>
+        <span class="pos-cb-name" id="posCbName">${escapeHtml(state.selectedCustomerName || t('noCustomer', 'Walk-in customer'))}</span>
+      </span>
+      <button class="pos-cb-btn" id="posCbBtn" type="button">${ICON.user}<span>${state.selectedCustomerId ? t('change', 'Change') : t('selectCustomer', 'Select customer')}</span></button>
+    </div>
     <div class="pos-layout">
       <!-- LEFT: product browser -->
       <div class="pos-panel pos-left">
@@ -1106,6 +1322,16 @@ function renderLayout() {
         </div>
       </div>
     </div>
+    <!-- Mobile: sticky Cart bar — the ALWAYS-VISIBLE cart entry point.
+         Without it (and with the FAB hidden by CSS) the cart drawer was
+         unreachable on phones, blocking the sale after STEP 1. -->
+    <button class="pos-mobile-summary" id="posMobileSummary" type="button" aria-label="${escapeHtml(t('cart', 'Cart'))}">
+      <span class="sum-texts">
+        <span class="sum-items" id="posSumItems">${t('cartTotal', 'Cart total')}</span>
+        <span class="sum-total" id="posSumTotal">${fmtMoney(0)}</span>
+      </span>
+      <span class="sum-cta">${ICON.cart}<span>${t('cart', 'Cart')}</span></span>
+    </button>
     <div class="pos-cart-backdrop" id="posCartBackdrop"></div>
     <button class="pos-cart-fab" id="posCartFab" type="button" aria-label="${escapeHtml(t('cart', 'Cart'))}">
       ${ICON.cart}
@@ -1152,7 +1378,7 @@ function renderProductsGridInner() {
     const stockClass = out ? 'out' : (low ? 'low' : 'in');
     const stockLabel = out ? t('outOfStock', 'Out of stock') : (low ? t('lowStockBadge', 'Low stock') : (t('stock', 'Stock') + ': ' + stock));
     const img = (p.images && p.images.length)
-      ? `<img src="${escapeHtml(p.images[0])}" alt="${escapeHtml(name)}" loading="lazy" onerror="this.style.display='none';this.parentNode.innerHTML='${escapeHtml(productInitial(p))}'" />`
+      ? `<img src="${escapeHtml(window.resolveAssetUrl ? window.resolveAssetUrl(p.images[0]) : p.images[0])}" alt="${escapeHtml(name)}" loading="lazy" onerror="this.style.display='none';this.parentNode.innerHTML='${escapeHtml(productInitial(p))}'" />`
       : escapeHtml(productInitial(p));
     return `
       <button class="pos-product" data-id="${escapeHtml(p._id)}" type="button" ${out ? 'disabled' : ''} aria-label="${escapeHtml(name)}">
@@ -1242,8 +1468,8 @@ function computeTotals() {
   const taxRate = Number(state.settings.taxRate || 0);
   const taxableBase = Math.max(0, subtotal - totalDiscount);
   const tax = taxableBase * (taxRate / 100);
-  // Cart total is T.T.C — same formula as the backend (afterDiscount + tax + timbre).
-  const total = Math.max(0, taxableBase + tax + timbre);
+  // Cart total excludes TVA and Timbre — they are computed only in the final invoice.
+  const total = Math.max(0, subtotal - totalDiscount);
   return { subtotal, itemDiscounts, cartDiscount, totalDiscount, timbre, tax, taxRate, total };
 }
 
@@ -1258,14 +1484,7 @@ function renderTotalsInner() {
   if (tt.cartDiscount > 0) {
     rows.push(`<div class="pos-totals-row"><span class="pos-totals-label">${t('discount', 'Coupon discount')}</span><span class="pos-totals-val">−${fmtMoney(tt.cartDiscount)}</span></div>`);
   }
-  if (tt.timbre > 0) {
-    rows.push(`<div class="pos-totals-row"><span class="pos-totals-label">${t('timbre', 'Timbre')}</span><span class="pos-totals-val">${fmtMoney(tt.timbre)}</span></div>`);
-  }
-  if (tt.taxRate > 0) {
-    // t('vat','TVA') falls back to the literal 'TVA' when the key is missing
-    rows.push(`<div class="pos-totals-row"><span class="pos-totals-label">${t('vat', 'TVA')} (${tt.taxRate} %)</span><span class="pos-totals-val">${fmtMoney(tt.tax)}</span></div>`);
-  }
-  rows.push(`<div class="pos-totals-row total"><span class="pos-totals-label">${t('total', 'Total')} (T.T.C)</span><span class="pos-totals-val">${fmtMoney(tt.total)}</span></div>`);
+  rows.push(`<div class="pos-totals-row total"><span class="pos-totals-label">${t('total', 'Total')}</span><span class="pos-totals-val">${fmtMoney(tt.total)}</span></div>`);
   return rows.join('');
 }
 
@@ -1348,11 +1567,13 @@ function saveCurrentCartToCarts() {
 }
 
 function switchCartToCustomer(customerId, customerName, loyaltyPoints) {
+  const previousKey = state.activeCustomerId || 'walkin';
+  // Stash the live cart under the tab we are leaving (multi-cart invariant)
   saveCurrentCartToCarts();
-  state.activeCustomerId = customerId;
-  const key = customerId;
-  const saved = state.customerCarts[key];
+
+  const saved = state.customerCarts[customerId];
   if (saved) {
+    // Returning to a customer who already had a stashed cart → restore it.
     state.cart = (saved.cart || []).map(it => ({ ...it }));
     state.couponCode = saved.couponCode || '';
     state.couponDiscount = saved.couponDiscount || 0;
@@ -1361,9 +1582,13 @@ function switchCartToCustomer(customerId, customerName, loyaltyPoints) {
     state.amountPaid = saved.amountPaid || 0;
     state.splitCash = saved.splitCash || 0;
     state.splitCard = saved.splitCard || 0;
-    delete state.customerCarts[key];
+    delete state.customerCarts[customerId];
   } else {
-    state.cart = [];
+    // NEW customer cart: CARRY OVER the items that were just added instead
+    // of wiping them. Previously selecting a customer emptied the cart,
+    // forcing the user to re-add every product (main mobile UX complaint).
+    const stash = state.customerCarts[previousKey];
+    state.cart = ((stash && stash.cart) || []).map(it => ({ ...it }));
     state.couponCode = '';
     state.couponDiscount = 0;
     state.couponObj = null;
@@ -1372,6 +1597,11 @@ function switchCartToCustomer(customerId, customerName, loyaltyPoints) {
     state.splitCash = 0;
     state.splitCard = 0;
   }
+  // Items MOVED to the new customer tab → the previous tab must NOT keep
+  // a duplicate copy of the carried-over items.
+  delete state.customerCarts[previousKey];
+
+  state.activeCustomerId = customerId;
   state.selectedCustomerId = customerId;
   state.selectedCustomerName = customerName || '';
   state.loyaltyPoints = loyaltyPoints || 0;
@@ -1447,6 +1677,15 @@ function updateCustomerDisplay(loyaltyPoints) {
   const lp = (loyaltyPoints !== undefined ? loyaltyPoints : (state.loyaltyPoints || 0));
   if (nm) nm.textContent = state.selectedCustomerName || t('noCustomer', 'Walk-in customer');
   if (mt) mt.textContent = lp > 0 ? (t('loyaltyPoints', 'Loyalty') + ': ' + lp) : '';
+  // Sync the mobile customer-first bar (STEP 1)
+  const bar = document.getElementById('posCustomerBar');
+  if (bar) {
+    bar.classList.toggle('is-set', !!state.selectedCustomerId);
+    const cbName = document.getElementById('posCbName');
+    if (cbName) cbName.textContent = state.selectedCustomerName || t('noCustomer', 'Walk-in customer');
+    const cbBtnText = bar.querySelector('.pos-cb-btn span');
+    if (cbBtnText) cbBtnText.textContent = state.selectedCustomerId ? t('change', 'Change') : t('selectCustomer', 'Select customer');
+  }
   const existing = document.getElementById('posCustomerClear');
   if (state.selectedCustomerId) {
     if (!existing) {
@@ -1941,6 +2180,19 @@ function refreshCart() {
   if (count) count.textContent = String(totalQty);
   const fabBadge = document.getElementById('posFabBadge');
   if (fabBadge) fabBadge.textContent = String(totalQty);
+  // Pulse the mobile FAB while the cart has items (draws attention)
+  const fab = document.getElementById('posCartFab');
+  if (fab) fab.classList.toggle('has-items', totalQty > 0);
+  // Keep the mobile sticky Cart bar in sync (items + total + pulse)
+  const sumItems = document.getElementById('posSumItems');
+  const sumTotal = document.getElementById('posSumTotal');
+  const sumBar = document.getElementById('posMobileSummary');
+  if (sumItems && sumTotal && sumBar) {
+    const st = computeTotals();
+    sumItems.textContent = totalQty + ' × ' + t('cartTotal', 'Cart total');
+    sumTotal.textContent = fmtMoney(st.total);
+    sumBar.classList.toggle('has-items', totalQty > 0);
+  }
   refreshCartTotalsAndPay();
   saveCart();
 }
@@ -1984,7 +2236,6 @@ function updateSessionChip() {
  * ============================================================ */
 
 let listeners = [];
-let _posObserver = null; // IntersectionObserver has no removeEventListener — tracked separately
 function addListener(target, type, fn, opts) {
   if (!target) return;
   target.addEventListener(type, fn, opts);
@@ -1995,7 +2246,6 @@ function cleanupListeners() {
     try { target.removeEventListener(type, fn, opts); } catch (_) {}
   });
   listeners = [];
-  if (_posObserver) { try { _posObserver.disconnect(); } catch (_) {} _posObserver = null; }
 }
 
 function bindEvents() {
@@ -2011,7 +2261,8 @@ function bindEvents() {
       if (e.key === 'Enter') {
         e.preventDefault();
         const q = search.value.trim();
-        // Exact barcode match in currently loaded products → add to cart instantly
+        if (!q) return;
+        // 1) Exact barcode match in currently loaded products → add instantly
         if (isBarcodeLike(q)) {
           const match = state.products.find(p => p.barcode && p.barcode === q);
           if (match) {
@@ -2021,9 +2272,15 @@ function bindEvents() {
             fetchProducts(true);
             return;
           }
-          // Otherwise, attempt backend barcode lookup
+          // 2) Backend barcode lookup (covers products not yet loaded).
+          //    Runs FIRST for barcode-like strings so a scanner typing into
+          //    the field always lands the product in the cart — a plain
+          //    text search is only the last resort.
           lookupBarcode(q).then(ok => {
             if (ok) { search.value = ''; state.search = ''; fetchProducts(true); }
+            else { // 3) not a barcode either → plain text search
+              state.search = q; fetchProducts(true);
+            }
           });
           return;
         }
@@ -2084,7 +2341,7 @@ function bindEvents() {
       });
     }, { root: null, rootMargin: '200px', threshold: 0 });
     io.observe(sentinel);
-    _posObserver = io;
+    listeners.push({ target: io, type: '__io', fn: null, opts: null });
   }
 
   // Cart items (event delegation)
@@ -2098,6 +2355,10 @@ function bindEvents() {
     switchCartTab(null);
     if (window.Toast) window.Toast.info(t('customerCleared', 'Customer cleared'));
   });
+
+  // Mobile customer-first bar (STEP 1)
+  const cbBtn = document.getElementById('posCbBtn');
+  if (cbBtn) addListener(cbBtn, 'click', () => openCustomerModal());
 
   // Cart tabs (multi-customer) — event delegation
   const tabsEl = document.getElementById('posCartTabs');
@@ -2161,6 +2422,8 @@ function bindEvents() {
     if (cartBackdrop) cartBackdrop.classList.remove('show');
   }
   if (cartFab) addListener(cartFab, 'click', openMobileCart);
+  const mobileSummary = document.getElementById('posMobileSummary');
+  if (mobileSummary) addListener(mobileSummary, 'click', openMobileCart);
   if (cartBackdrop) addListener(cartBackdrop, 'click', closeMobileCart);
   if (cartCloseMobile) addListener(cartCloseMobile, 'click', closeMobileCart);
 
@@ -2387,61 +2650,73 @@ function bindPayExtraEvents() {
 }
 
 /* ============================================================
- * Barcode scanner detection
+ * Barcode scanner detection (USB / keyboard-wedge scanners)
+ * ------------------------------------------------------------
+ * A hardware scanner "types" the code very fast and consistently
+ * (inter-key gaps typically < 50ms) and finishes with Enter.
+ * We therefore measure the intervals between consecutive keys and
+ * treat the input as a scan only when they are uniform and fast —
+ * this avoids misfiring on a fast human typist typing a numeric
+ * search query. Alphanumeric barcodes (Code39 etc.) are accepted.
  * ============================================================ */
 
 let scanBuffer = '';
-let scanStartTime = 0;
-let scanLastKeyTime = 0;
+let scanTimes = [];       // timestamps of buffered keys
+
+function scanReset() {
+  scanBuffer = '';
+  scanTimes = [];
+}
+
+/* Thresholds are intentionally GENEROUS:
+ * programmable scanners ship with inter-character delays of 0–120ms and
+ * some models (or Bluetooth wedges) pause up to ~300ms between chars.
+ * The old limits (avg ≤ 60ms, maxGap ≤ 160ms) silently rejected those
+ * devices, which is why USB scanners "did not work" on desktop while the
+ * camera scanner worked on mobile. A fast human typist still averages
+ * 150–250ms per key with irregular rhythm, so these limits stay safe. */
+function scanLooksLikeScanner() {
+  if (scanBuffer.length < 3 || scanTimes.length < 3) return false;
+  const intervals = [];
+  for (let i = 1; i < scanTimes.length; i++) intervals.push(scanTimes[i] - scanTimes[i - 1]);
+  const avg = intervals.reduce((s, v) => s + v, 0) / intervals.length;
+  const maxGap = Math.max.apply(null, intervals);
+  // Scanner: fast average AND no long pause between characters.
+  return avg <= 150 && maxGap <= 400;
+}
 
 function onScanKeydown(e) {
-  // Ignore keystrokes originating from form fields — the search input has its
-  // own Enter/barcode handling and numeric inputs must not trigger lookups.
-  const tag = (e.target && e.target.tagName) || '';
-  if (/INPUT|TEXTAREA|SELECT/.test(tag)) return;
   // Allow Ctrl/Cmd combos to pass through (Ctrl+P, etc.)
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   const now = Date.now();
-  // Reset buffer if too much time has passed since last key
-  if (now - scanLastKeyTime > 500) {
-    scanBuffer = '';
-    scanStartTime = 0;
-  }
-  scanLastKeyTime = now;
+
+  // Idle timeout: human typing has natural pauses — reset the buffer.
+  const lastTime = scanTimes.length ? scanTimes[scanTimes.length - 1] : 0;
+  if (scanBuffer && now - lastTime > 600) scanReset();
 
   if (e.key === 'Enter') {
-    if (scanBuffer.length >= 4) {
-      const duration = now - scanStartTime;
-      const speed = scanBuffer.length / Math.max(duration / 1000, 0.001);
-      // Scanner: avg speed > 5 chars/sec (i.e. < 200ms per char)
-      if (speed >= 5 && isBarcodeLike(scanBuffer)) {
-        e.preventDefault();
-        const code = scanBuffer;
-        scanBuffer = '';
-        scanStartTime = 0;
-        // Clear search input if it contains the scanned code
-        const searchInput = document.getElementById('posSearch');
-        if (searchInput && searchInput.value.includes(code)) {
-          searchInput.value = '';
-          state.search = '';
-          fetchProducts(true);
-        }
-        lookupBarcode(code);
-        return;
+    const code = scanBuffer;
+    const isScan = scanLooksLikeScanner();
+    scanReset();
+    if (isScan && code.length >= 3) {
+      e.preventDefault();
+      e.stopPropagation();
+      const searchInput = document.getElementById('posSearch');
+      if (searchInput) {
+        // Scanner input may also have landed in the focused search field.
+        searchInput.value = '';
+        searchInput.blur();
       }
+      if (state.search) { state.search = ''; fetchProducts(true); }
+      lookupBarcode(code);
     }
-    scanBuffer = '';
-    scanStartTime = 0;
     return;
   }
 
   if (e.key && e.key.length === 1) {
-    if (scanBuffer.length === 0) scanStartTime = now;
     scanBuffer += e.key;
-    if (scanBuffer.length > 30) {
-      scanBuffer = '';
-      scanStartTime = 0;
-    }
+    scanTimes.push(now);
+    if (scanBuffer.length > 64) scanReset();
   }
 }
 
@@ -2580,6 +2855,17 @@ async function completeSale() {
     }
   }
 
+  // Choose the invoice print language (FR / EN) right before completing
+  // the sale. jsPDF core fonts cannot render Arabic, so the printed
+  // invoice is offered in French or English WITHOUT changing the page
+  // language. The choice is remembered for next time.
+  let invoiceLang = null;
+  if (typeof window.chooseInvoiceLanguage === 'function') {
+    invoiceLang = await window.chooseInvoiceLanguage();
+    if (invoiceLang === null) return; // user cancelled the popup
+  }
+  state.invoiceLang = invoiceLang || window.getStoredInvoiceLang() || 'fr';
+
   const items = state.cart.map(it => ({
     product: it.productId,
     quantity: it.quantity,
@@ -2651,7 +2937,11 @@ async function completeSale() {
  * ============================================================ */
 
 function openReceiptModal(sale) {
-  const lang = (typeof window.currentLang !== 'undefined' && window.currentLang) || (localStorage.getItem('lang') || 'ar');
+  const pageLang = (typeof window.currentLang !== 'undefined' && window.currentLang) || (localStorage.getItem('lang') || 'ar');
+  // Invoice language chosen in the pre-sale popup (FR/EN) — falls back to
+  // the stored preference. The PAGE language stays untouched.
+  const invLang = state.invoiceLang || (window.getStoredInvoiceLang ? window.getStoredInvoiceLang() : 'fr');
+  const IL = (window.invoiceLabels ? window.invoiceLabels(invLang) : { invoice: 'FACTURE', invoiceNumber: 'N° Facture', date: 'Date', customer: 'Client', walkin: 'Particulier', payment: 'Paiement', cash: 'Espèces', card: 'Carte', transfer: 'Virement', split: 'Mixte', product: 'Produit', unit: 'Unité', qty: 'Qté', unitPriceHT: 'P.Unitaire H.T', amountHT: 'Montant H.T', totalHT: 'Total H.T', itemDiscounts: 'Remises articles', cartDiscount: 'Remise', coupon: 'Coupon', vat: 'TVA', stamp: 'Timbre', totalTTC: 'TOTAL T.T.C', wordsIntro: 'Arrêté la présente facture à la somme de :', thanks: 'Merci de votre confiance' });
   const store = state.settings;
   const headerText = store.invoiceHeader && store.invoiceHeader.trim() ? `
     <div style="font-size:13px;color:var(--text-secondary);text-align:center;margin:4px 0 8px 0;padding:4px 0;border-bottom:1px dashed var(--border-color);line-height:1.5;">
@@ -2660,11 +2950,10 @@ function openReceiptModal(sale) {
 ` : '';
   const company = store.companyInfo || {};
   const taxRate = Number(store.taxRate || 0);
-  const saleDate = fmtDate(sale.saleDate || sale.createdAt || new Date(), lang);
-  // "Walk-in customer" → "Particulier"
+  const saleDate = fmtDate(sale.saleDate || sale.createdAt || new Date(), pageLang);
   const rawCustomer = resolveCustomerName(sale.customer, state.selectedCustomerName || '');
   const customerName = rawCustomer && rawCustomer !== t('noCustomer', 'Walk-in customer') && rawCustomer !== 'Walk-in customer'
-    ? rawCustomer : 'Particulier';
+    ? rawCustomer : IL.walkin;
   const items = (sale.items || []).map(it => {
     const name = it.productName || (it.product && (productName(it.product) || it.product.name)) || it.name || '—';
     const qty = Number(it.quantity) || 0;
@@ -2681,10 +2970,10 @@ function openReceiptModal(sale) {
   const tax = Number(sale.tax) || 0;
   const timbre = Number(sale.timbre) || 0;
   const total = Number(sale.total) || 0;
-  const totalWords = num2frenchwords(total);
+  const totalWords = invLang === 'en' ? '' : num2frenchwords(total);
   const currency = store.currency || 'DZD';
   const payMethod = sale.paymentMethod || 'cash';
-  const payLabel = paymentLabel(payMethod);
+  const payLabel = IL[paymentLabel(payMethod)] ? IL[paymentLabel(payMethod)] : paymentLabel(payMethod);
   const invoiceNo = sale.saleNumber || '';
   const customText = (store.invoiceCustomText || '').trim();
 
@@ -2716,23 +3005,23 @@ function openReceiptModal(sale) {
               </div>
               <hr style="border:none;border-top:2px solid ${(store.invoicePrimaryColor || '#10b981')};margin:0.6rem 0;" />
               <div class="receipt-meta">
-                <div><strong>FACTURE</strong></div>
-                <div><strong>${t('invoiceNumber', 'Invoice number')}:</strong> ${escapeHtml(invoiceNo)}</div>
-                <div><strong>${t('date', 'Date')}:</strong> ${escapeHtml(saleDate)}</div>
+                <div><strong>${escapeHtml(IL.invoice)}</strong></div>
+                <div><strong>${escapeHtml(IL.invoiceNumber)}:</strong> ${escapeHtml(invoiceNo)}</div>
+                <div><strong>${escapeHtml(IL.date)}:</strong> ${escapeHtml(saleDate)}</div>
               </div>
               <div class="receipt-meta">
-                <div><strong>${t('customer', 'Customer')}:</strong> ${escapeHtml(customerName)}</div>
-                <div><strong>${t('paymentMethod', 'Payment')}:</strong> ${escapeHtml(payLabel)}</div>
+                <div><strong>${escapeHtml(IL.customer)}:</strong> ${escapeHtml(customerName)}</div>
+                <div><strong>${escapeHtml(IL.payment)}:</strong> ${escapeHtml(payLabel)}</div>
               </div>
               <table>
                 <thead>
                   <tr>
                     <th>#</th>
-                    <th>${t('product', 'Product')}</th>
-                    <th>${t('unit', 'Unité')}</th>
-                    <th class="num">${t('quantity', 'Qté')}</th>
-                    <th class="num">P Unitaire H.T</th>
-                    <th class="num">Montant H.T</th>
+                    <th>${escapeHtml(IL.product)}</th>
+                    <th>${escapeHtml(IL.unit)}</th>
+                    <th class="num">${escapeHtml(IL.qty)}</th>
+                    <th class="num">${escapeHtml(IL.unitPriceHT)}</th>
+                    <th class="num">${escapeHtml(IL.amountHT)}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2748,24 +3037,25 @@ function openReceiptModal(sale) {
                 </tbody>
               </table>
               <div class="receipt-totals">
-                <div class="receipt-totals-row"><span>Total H.T</span><span>${subtotal.toFixed(2)} ${currency}</span></div>
-                ${itemDiscounts > 0 ? `<div class="receipt-totals-row"><span>${t('perItemDiscount', 'Item discounts')}</span><span>−${itemDiscounts.toFixed(2)} ${currency}</span></div>` : ''}
-                ${cartDiscount > 0 ? `<div class="receipt-totals-row"><span>${t('discount', 'Cart discount')}</span><span>−${cartDiscount.toFixed(2)} ${currency}</span></div>` : ''}
-                ${couponDiscount > 0 ? `<div class="receipt-totals-row"><span>${t('couponDiscount', 'Coupon')}</span><span>−${couponDiscount.toFixed(2)} ${currency}</span></div>` : ''}
-                ${tax > 0 ? `<div class="receipt-totals-row"><span>TVA (${taxRate} %)</span><span>${tax.toFixed(2)} ${currency}</span></div>` : ''}
-                ${timbre > 0 ? `<div class="receipt-totals-row"><span>${t('timbre', 'Timbre')}</span><span>${timbre.toFixed(2)} ${currency}</span></div>` : ''}
-                <div class="receipt-totals-row total"><span>TOTAL T.T.C</span><span>${total.toFixed(2)} ${currency}</span></div>
-                ${totalWords ? `<div class="receipt-words">Arrêté la présente facture à la somme de : ${escapeHtml(totalWords)}.</div>` : ''}
+                <div class="receipt-totals-row"><span>${escapeHtml(IL.totalHT)}</span><span>${subtotal.toFixed(2)} ${currency}</span></div>
+                ${itemDiscounts > 0 ? `<div class="receipt-totals-row"><span>${escapeHtml(IL.itemDiscounts)}</span><span>−${itemDiscounts.toFixed(2)} ${currency}</span></div>` : ''}
+                ${cartDiscount > 0 ? `<div class="receipt-totals-row"><span>${escapeHtml(IL.cartDiscount)}</span><span>−${cartDiscount.toFixed(2)} ${currency}</span></div>` : ''}
+                ${couponDiscount > 0 ? `<div class="receipt-totals-row"><span>${escapeHtml(IL.coupon)}</span><span>−${couponDiscount.toFixed(2)} ${currency}</span></div>` : ''}
+                ${tax > 0 ? `<div class="receipt-totals-row"><span>${escapeHtml(IL.vat)} (${taxRate} %)</span><span>${tax.toFixed(2)} ${currency}</span></div>` : ''}
+                ${timbre > 0 ? `<div class="receipt-totals-row"><span>${escapeHtml(IL.stamp)}</span><span>${timbre.toFixed(2)} ${currency}</span></div>` : ''}
+                <div class="receipt-totals-row total"><span>${escapeHtml(IL.totalTTC)}</span><span>${total.toFixed(2)} ${currency}</span></div>
+                ${totalWords ? `<div class="receipt-words">${escapeHtml(IL.wordsIntro)} ${escapeHtml(totalWords)}.</div>` : ''}
                 ${customText ? `<div class="receipt-custom-text" style="margin-top:0.5rem;font-size:0.78rem;color:var(--text-primary);white-space:pre-wrap;">${escapeHtml(customText)}</div>` : ''}
               </div>
               <div class="receipt-foot">
-                ${escapeHtml(store.invoiceFooter || t('thanks', 'Thank you for your trust'))}
+                ${escapeHtml(store.invoiceFooter || IL.thanks)}
               </div>
             </div>
           </div>
         </div>
         <div class="modal-footer">
           <button class="btn btn-ghost" type="button" data-action="new">${t('newSale', 'New sale')}</button>
+          <button class="btn btn-outline" type="button" data-action="ticket" title="${escapeHtml(t('printTicket80', 'Print ticket 80mm'))}">${ICON.print}<span style="margin-inline-start:0.3rem;">${t('ticket80', 'Ticket 80mm')}</span></button>
           <button class="btn btn-secondary" type="button" data-action="pdf">${ICON.download}<span style="margin-inline-start:0.3rem;">${t('downloadPdf', 'Download PDF')}</span></button>
           <button class="btn btn-primary" type="button" data-action="print">${ICON.print}<span style="margin-inline-start:0.3rem;">${t('print', 'Print')}</span></button>
         </div>
@@ -2780,6 +3070,9 @@ function openReceiptModal(sale) {
   overlay.querySelector('[data-action="new"]').addEventListener('click', close);
   overlay.querySelector('[data-action="print"]').addEventListener('click', () => printReceipt());
   overlay.querySelector('[data-action="pdf"]').addEventListener('click', () => generateInvoicePDF(sale));
+  overlay.querySelector('[data-action="ticket"]').addEventListener('click', () => {
+    if (window.printThermalTicket) window.printThermalTicket(sale, state.settings, invLang);
+  });
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
   overlay.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') { e.stopPropagation(); close(); }
@@ -2818,12 +3111,15 @@ function generateInvoicePDF(sale) {
     const company = store.companyInfo || {};
     const currency = store.currency || 'DZD';
     const taxRate = Number(store.taxRate || 0);
-    const lang = (typeof window.currentLang !== 'undefined' && window.currentLang) || (localStorage.getItem('lang') || 'ar');
-    const saleDate = fmtDate(sale.saleDate || sale.createdAt || new Date(), lang);
-    // "Walk-in customer" → "Particulier"
+    const pageLang = (typeof window.currentLang !== 'undefined' && window.currentLang) || (localStorage.getItem('lang') || 'ar');
+    // Invoice language (FR/EN) chosen in the pre-sale popup — NOT the page language
+    const invLang = state.invoiceLang || (window.getStoredInvoiceLang ? window.getStoredInvoiceLang() : 'fr');
+    const IL = window.invoiceLabels ? window.invoiceLabels(invLang) : {};
+    const saleDate = fmtDate(sale.saleDate || sale.createdAt || new Date(), pageLang);
+    // Walk-in customer → localized label
     const rawCustomer = resolveCustomerName(sale.customer, state.selectedCustomerName || '');
     const customerName = rawCustomer && rawCustomer !== t('noCustomer', 'Walk-in customer') && rawCustomer !== 'Walk-in customer'
-      ? rawCustomer : 'Particulier';
+      ? rawCustomer : (IL.walkin || 'Particulier');
     const items = (sale.items || []).map(it => {
       const name = it.productName || (it.product && (productName(it.product) || it.product.name)) || it.name || '—';
       const qty = Number(it.quantity) || 0;
@@ -2833,27 +3129,6 @@ function generateInvoicePDF(sale) {
       const unit = it.productUnit || (it.product && (it.product.unit || (it.product.unit))) || (it.unit) || 'pcs';
       return { name, qty, price, discount, total, unit };
     });
-
-    // jsPDF core fonts cannot render Arabic (garbled output). When Arabic text is
-    // present, rasterize the on-screen receipt via html2canvas, or fall back to
-    // the browser print dialog (choose "Save as PDF").
-    const hasArabic = /[\u0600-\u06FF]/.test(
-      [store.storeName || '', customerName].concat(items.map(it => it.name || '')).join(' ')
-    );
-    if (hasArabic) {
-      const el = document.querySelector('#posReceiptModal .receipt-sheet');
-      if (el && typeof html2canvas !== 'undefined') {
-        const doc2 = new window.jspdf.jsPDF('p', 'mm', 'a4');
-        doc2.html(el, {
-          callback: (d) => d.save('invoice-' + (sale.saleNumber || '') + '.pdf'),
-          x: 10, y: 10, width: 190, windowWidth: 800
-        });
-        return;
-      }
-      if (window.Toast) window.Toast.info(t('pdfArabicFallback', 'Arabic text detected — opening the print dialog instead (choose "Save as PDF")'));
-      printReceipt();
-      return;
-    }
     const subtotal = Number(sale.subtotal) || 0;
     const cartDiscount = Number(sale.discount) || 0;
     const couponDiscount = Number(sale.couponDiscount) || 0;
@@ -2861,9 +3136,9 @@ function generateInvoicePDF(sale) {
     const tax = Number(sale.tax) || 0;
     const timbre = Number(sale.timbre) || 0;
     const total = Number(sale.total) || 0;
-    const totalWords = num2frenchwords(total);
+    const totalWords = invLang === 'en' ? '' : num2frenchwords(total);
     const payMethod = sale.paymentMethod || 'cash';
-    const payLabel = paymentLabel(payMethod);
+    const payLabel = (IL && IL[paymentLabel(payMethod)]) ? IL[paymentLabel(payMethod)] : paymentLabel(payMethod);
     const invoiceNo = sale.saleNumber || '';
     const rightX = pageWidth - margin;
     const centerX = pageWidth / 2;
@@ -2933,13 +3208,13 @@ if (headerText) {
     doc.setFontSize(13);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(20, 20, 20);
-    doc.text('FACTURE', margin, y);
+    doc.text(IL.invoice || 'FACTURE', margin, y);
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(80, 80, 80);
-    doc.text(t('invoiceNumber', 'Invoice number') + ': ' + invoiceNo, rightX, y, { align: 'right' });
+    doc.text((IL.invoiceNumber || 'N° Facture') + ': ' + invoiceNo, rightX, y, { align: 'right' });
     y += 5;
-    doc.text(t('date', 'Date') + ': ' + saleDate, rightX, y, { align: 'right' });
+    doc.text((IL.date || 'Date') + ': ' + saleDate, rightX, y, { align: 'right' });
     y += 6;
 
     // Customer + Payment
@@ -2947,14 +3222,14 @@ if (headerText) {
     doc.setTextColor(20, 20, 20);
     // Customer block (left) — label then value, no big gap
     doc.setFont('helvetica', 'bold');
-    doc.text(t('customer', 'Customer') + ':', margin, y);
-    const custLabelWidth = doc.getTextWidth(t('customer', 'Customer') + ':') + 2;
+    doc.text((IL.customer || 'Client') + ':', margin, y);
+    const custLabelWidth = doc.getTextWidth((IL.customer || 'Client') + ':') + 2;
     doc.setFont('helvetica', 'normal');
     doc.text(customerName, margin + custLabelWidth, y);
 
     // Payment block (right) — label then value, no big gap
     doc.setFont('helvetica', 'bold');
-    const payLabelText = t('paymentMethod', 'Payment') + ':';
+    const payLabelText = (IL.payment || 'Paiement') + ':';
     const payValueText = payLabel;
     const payValueWidth = doc.getTextWidth(payValueText);
     const payLabelWidth = doc.getTextWidth(payLabelText);
@@ -2968,11 +3243,11 @@ if (headerText) {
     // ===== Items table =====
     const head = [[
       '#',
-      t('product', 'Product'),
-      t('unit', 'Unité'),
-      t('quantity', 'Qté'),
-      'P Unitaire H.T',
-      'Montant H.T'
+      IL.product || 'Produit',
+      IL.unit || 'Unité',
+      IL.qty || 'Qté',
+      IL.unitPriceHT || 'P.Unitaire H.T',
+      IL.amountHT || 'Montant H.T'
     ]];
     const body = items.map((it, i) => [
       String(i + 1),
@@ -3022,23 +3297,23 @@ if (headerText) {
     doc.text('Total H.T :', labelX, y);
     doc.text(subtotal.toFixed(2) + ' ' + currency, valueX, y, { align: 'right' }); y += 6;
     if (itemDiscounts > 0) {
-      doc.text(t('perItemDiscount', 'Item discounts') + ' :', labelX, y);
+      doc.text((IL.itemDiscounts || 'Remises articles') + ' :', labelX, y);
       doc.text('−' + itemDiscounts.toFixed(2) + ' ' + currency, valueX, y, { align: 'right' }); y += 6;
     }
     if (cartDiscount > 0) {
-      doc.text(t('discount', 'Cart discount') + ' :', labelX, y);
+      doc.text((IL.cartDiscount || 'Remise') + ' :', labelX, y);
       doc.text('−' + cartDiscount.toFixed(2) + ' ' + currency, valueX, y, { align: 'right' }); y += 6;
     }
     if (couponDiscount > 0) {
-      doc.text(t('couponDiscount', 'Coupon') + ' :', labelX, y);
+      doc.text((IL.coupon || 'Coupon') + ' :', labelX, y);
       doc.text('−' + couponDiscount.toFixed(2) + ' ' + currency, valueX, y, { align: 'right' }); y += 6;
     }
     if (tax > 0) {
-      doc.text('TVA (' + taxRate + ' %) :', labelX, y);
+      doc.text((IL.vat || 'TVA') + ' (' + taxRate + ' %) :', labelX, y);
       doc.text(tax.toFixed(2) + ' ' + currency, valueX, y, { align: 'right' }); y += 6;
     }
     if (timbre > 0) {
-      doc.text(t('timbre', 'Timbre') + ' :', labelX, y);
+      doc.text((IL.stamp || 'Timbre') + ' :', labelX, y);
       doc.text(timbre.toFixed(2) + ' ' + currency, valueX, y, { align: 'right' }); y += 6;
     }
     y += 4;
@@ -3049,15 +3324,15 @@ if (headerText) {
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(prR, prG, prB);
-    doc.text('TOTAL T.T.C :', labelX, y);
+    doc.text((IL.totalTTC || 'TOTAL T.T.C') + ' :', labelX, y);
     doc.text(total.toFixed(2) + ' ' + currency, valueX, y, { align: 'right' }); y += 10;
 
-    // ===== Total in words (French legal requirement) =====
+    // ===== Total in words (French legal requirement — FR only) =====
     if (totalWords) {
       doc.setFontSize(9);
       doc.setFont('helvetica', 'italic');
       doc.setTextColor(70, 70, 70);
-      const wordsLabel = 'Arrêté la présente facture à la somme de :';
+      const wordsLabel = IL.wordsIntro || 'Arrêté la présente facture à la somme de :';
       const fullText = wordsLabel + ' ' + totalWords + '.';
       const splitText = doc.splitTextToSize(fullText, pageWidth - 2 * margin);
       splitText.forEach(line => {
@@ -3084,7 +3359,7 @@ if (headerText) {
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(140, 140, 140);
-    const footer = store.invoiceFooter || t('thanks', 'Thank you for your trust');
+    const footer = store.invoiceFooter || (IL.thanks || t('thanks', 'Thank you for your trust'));
     doc.text(footer, centerX, pageHeight - 10, { align: 'center' });
 
     doc.save('invoice-' + invoiceNo + '.pdf');

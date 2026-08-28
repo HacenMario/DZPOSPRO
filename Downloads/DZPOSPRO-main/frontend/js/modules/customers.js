@@ -159,14 +159,14 @@ function renderTable() {
     const totalSpent = fmtCurrency(c.totalSpent);
     return `
       <tr data-id="${c._id}" style="cursor:pointer;">
-        <td class="cell-muted" data-label="#">${idx}</td>
-        <td class="cell-strong" data-label="${t('name', 'Name')}">${escapeHtml(custName(c))}</td>
-        <td data-label="${t('phone', 'Phone')}">${phone}</td>
-        <td data-label="${t('emailAddress', 'Email')}">${email}</td>
-        <td class="cell-muted" data-label="${t('address', 'Address')}" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(custAddress(c))}">${escapeHtml(address)}</td>
-        <td data-label="${t('loyaltyPoints', 'Loyalty')}">${loyaltyBadge}</td>
-        <td class="cell-strong" data-label="${t('totalSpent', 'Total spent')}">${totalSpent}</td>
-        <td data-label="${t('status', 'Status')}">${statusBadge(c)}</td>
+        <td class="cell-muted">${idx}</td>
+        <td class="cell-strong">${escapeHtml(custName(c))}</td>
+        <td>${phone}</td>
+        <td>${email}</td>
+        <td class="cell-muted" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(custAddress(c))}">${escapeHtml(address)}</td>
+        <td>${loyaltyBadge}</td>
+        <td class="cell-strong">${totalSpent}</td>
+        <td>${statusBadge(c)}</td>
         <td>
           <div class="table-actions">
             <button class="table-action-btn view" data-id="${c._id}" aria-label="${t('view', 'View')}" title="${t('view', 'View')}">
@@ -288,6 +288,8 @@ function bindToolbar() {
   if (addBtn) addBtn.addEventListener('click', () => openCustomerModal(null));
   const addBtnHeader = document.getElementById('addCustomerBtnHeader');
   if (addBtnHeader) addBtnHeader.addEventListener('click', () => openCustomerModal(null));
+  const emptyAdd = document.getElementById('emptyAddCustBtn');
+  if (emptyAdd) emptyAdd.addEventListener('click', () => openCustomerModal(null));
   const refresh = document.getElementById('customerRefreshBtn');
   if (refresh) refresh.addEventListener('click', () => refreshTable());
 }
@@ -295,10 +297,6 @@ function bindToolbar() {
 function bindTable() {
   const container = document.getElementById('customersTableContainer');
   if (!container) return;
-
-  // Bound here (not bindToolbar) so the empty-state button survives every table refresh
-  const emptyAdd = document.getElementById('emptyAddCustBtn');
-  if (emptyAdd) emptyAdd.addEventListener('click', () => openCustomerModal(null));
 
   container.querySelectorAll('.table-action-btn.edit').forEach(b => {
     b.addEventListener('click', (e) => {

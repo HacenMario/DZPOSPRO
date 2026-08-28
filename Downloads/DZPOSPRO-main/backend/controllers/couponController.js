@@ -11,21 +11,14 @@ const decorate = (c, lang) => {
     return o;
 };
 
-// GET /api/coupons?page&limit&search&isActive
+// GET /api/coupons?page&limit
 const getCoupons = async (req, res, next) => {
     try {
         const lang = req.lang || 'ar';
         const { page, limit, skip } = parsePagination(req.query);
-        const { isActive, search } = req.query;
+        const { isActive } = req.query;
         const filter = {};
         if (isActive !== undefined) filter.isActive = isActive === 'true';
-        if (search) {
-            const r = new RegExp(String(search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-            filter.$or = [
-                { code: r },
-                { 'description.ar': r }, { 'description.en': r }, { 'description.fr': r }
-            ];
-        }
 
         const [docs, total] = await Promise.all([
             Coupon.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
@@ -71,7 +64,7 @@ const createCoupon = async (req, res, next) => {
             maxDiscount: Number(maxDiscount) || 0,
             validFrom: new Date(validFrom),
             validUntil: new Date(validUntil),
-            usageLimit: Math.max(0, parseInt(usageLimit, 10) || 0), // 0 = unlimited
+            usageLimit: Number(usageLimit) || 1,
             isActive: isActive !== undefined ? isActive : true,
             description: {
                 ar: description?.ar || '',
@@ -107,7 +100,7 @@ const updateCoupon = async (req, res, next) => {
         if (maxDiscount !== undefined) c.maxDiscount = Number(maxDiscount);
         if (validFrom !== undefined) c.validFrom = new Date(validFrom);
         if (validUntil !== undefined) c.validUntil = new Date(validUntil);
-        if (usageLimit !== undefined) c.usageLimit = Math.max(0, parseInt(usageLimit, 10) || 0); // 0 = unlimited
+        if (usageLimit !== undefined) c.usageLimit = Number(usageLimit);
         if (isActive !== undefined) c.isActive = isActive;
         if (description) {
             if (description.ar !== undefined) c.description.ar = description.ar;
@@ -153,8 +146,7 @@ const validateCoupon = async (req, res, next) => {
         if (now < coupon.validFrom || now > coupon.validUntil) {
             return errorResponse(res, 400, getTranslation('couponExpired', lang));
         }
-        // usageLimit 0 = unlimited
-        if (coupon.usageLimit > 0 && coupon.usedCount >= coupon.usageLimit) {
+        if (coupon.usedCount >= coupon.usageLimit) {
             return errorResponse(res, 400, getTranslation('couponUsedUp', lang));
         }
         if (Number(cartTotal) < coupon.minOrder) {

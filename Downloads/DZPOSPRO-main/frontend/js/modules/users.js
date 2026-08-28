@@ -160,13 +160,13 @@ function renderTable() {
     const lastLogin = u.lastLogin ? fmtDateTime(u.lastLogin) : '<span class="cell-muted">' + t('never', 'Never') + '</span>';
     return `
       <tr>
-        <td class="cell-muted" data-label="#">${idx}</td>
-        <td class="cell-strong" data-label="${t('name', 'Name')}">${escapeHtml(u.name || '—')}${isSelf ? ' <span class="badge badge-info" style="margin-inline-start:0.4rem;">' + t('you', 'You') + '</span>' : ''}</td>
-        <td class="cell-muted" data-label="${t('email', 'Email')}">${escapeHtml(u.email || '—')}</td>
-        <td data-label="${t('role', 'Role')}">${roleBadge(u.role)}</td>
-        <td data-label="${t('status', 'Status')}">${statusBadge(u.isActive)}</td>
-        <td class="cell-muted" data-label="${t('created', 'Created')}"><span dir="ltr">${escapeHtml(fmtDate(u.createdAt))}</span></td>
-        <td class="cell-muted" data-label="${t('lastLogin', 'Last login')}">${lastLogin}</td>
+        <td class="cell-muted">${idx}</td>
+        <td class="cell-strong">${escapeHtml(u.name || '—')}${isSelf ? ' <span class="badge badge-info" style="margin-inline-start:0.4rem;">' + t('you', 'You') + '</span>' : ''}</td>
+        <td class="cell-muted">${escapeHtml(u.email || '—')}</td>
+        <td>${roleBadge(u.role)}</td>
+        <td>${statusBadge(u.isActive)}</td>
+        <td class="cell-muted">${escapeHtml(fmtDate(u.createdAt))}</td>
+        <td class="cell-muted">${lastLogin}</td>
         <td>
           <div class="table-actions">
             <button class="table-action-btn edit" data-id="${u._id}" aria-label="${t('edit', 'Edit')}" title="${t('edit', 'Edit')}">
@@ -347,12 +347,12 @@ async function resetPassword(u) {
         title: t('resetPassword', 'Reset password'),
         message: t('resetPasswordFor', 'Enter a new password for "{name}"').replace('{name}', u.name || u.email),
         inputType: 'password',
-        placeholder: t('newPasswordPlaceholder', 'Enter new password (min 8 chars)')
+        placeholder: t('newPasswordPlaceholder', 'Enter new password (min 6 chars)')
       })
     : Promise.resolve(window.prompt('New password?', '')));
   if (pwd === null) return;
-  if (typeof pwd === 'string' && pwd.length < 8) {
-    if (window.Toast) window.Toast.error(t('passwordTooShort', 'Password must be at least 8 characters'));
+  if (typeof pwd === 'string' && pwd.length < 6) {
+    if (window.Toast) window.Toast.error(t('passwordTooShort', 'Password must be at least 6 characters'));
     return;
   }
   try {
@@ -401,8 +401,8 @@ function openUserModal(user) {
             <div class="form-row">
               <div class="form-group">
                 <label class="form-label">${t('password', 'Password')} ${isEdit ? '' : '<span class="req">*</span>'}</label>
-                <input class="input" id="uPassword" type="password" ${isEdit ? '' : 'required'} minlength="8" autocomplete="new-password" />
-                <div class="help-text">${isEdit ? t('passwordLeaveBlank', 'Leave blank to keep the current password') : t('passwordMinLength', 'Minimum 8 characters')}</div>
+                <input class="input" id="uPassword" type="password" ${isEdit ? '' : 'required'} minlength="6" autocomplete="new-password" />
+                <div class="help-text">${isEdit ? t('passwordLeaveBlank', 'Leave blank to keep the current password') : t('passwordMinLength', 'Minimum 6 characters')}</div>
               </div>
               <div class="form-group">
                 <label class="form-label">${t('role', 'Role')} <span class="req">*</span></label>
@@ -451,12 +451,12 @@ function openUserModal(user) {
 
     if (!name) { if (window.Toast) window.Toast.error(t('nameRequired', 'Name is required')); return; }
     if (!email || !isValidEmail(email)) { if (window.Toast) window.Toast.error(t('emailInvalid', 'Please enter a valid email')); return; }
-    if (!isEdit && (!password || password.length < 8)) {
-      if (window.Toast) window.Toast.error(t('passwordMinLength', 'Minimum 8 characters'));
+    if (!isEdit && (!password || password.length < 6)) {
+      if (window.Toast) window.Toast.error(t('passwordMinLength', 'Minimum 6 characters'));
       return;
     }
-    if (isEdit && password && password.length < 8) {
-      if (window.Toast) window.Toast.error(t('passwordMinLength', 'Minimum 8 characters'));
+    if (isEdit && password && password.length < 6) {
+      if (window.Toast) window.Toast.error(t('passwordMinLength', 'Minimum 6 characters'));
       return;
     }
 

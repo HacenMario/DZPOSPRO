@@ -25,7 +25,7 @@ const getCategories = async (req, res, next) => {
         const { search } = req.query;
         const filter = {};
         if (search) {
-            const r = new RegExp(String(search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+            const r = new RegExp(search, 'i');
             filter.$or = [{ 'name.ar': r }, { 'name.en': r }, { 'name.fr': r }];
         }
         // Note: include inactive categories too — the parent picker needs them.

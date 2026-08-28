@@ -184,15 +184,15 @@ function renderMovementsTable() {
     const reason = m.reason || '';
     return `
       <tr>
-        <td class="cell-muted" data-label="#">${idx}</td>
-        <td class="cell-muted" data-label="${t('date', 'Date')}"><span dir="ltr">${escapeHtml(fmtDateTime(m.createdAt))}</span></td>
-        <td class="cell-strong" data-label="${t('product', 'Product')}">${escapeHtml(productName(m.product))}</td>
-        <td data-label="${t('type', 'Type')}">${renderTypeBadge(m.type)}</td>
-        <td data-label="${t('quantity', 'Quantity')}">${renderQtyCell(m)}</td>
-        <td class="cell-muted" data-label="${t('previousStock', 'Previous stock')}">${escapeHtml(String(m.previousStock != null ? m.previousStock : '—'))}</td>
-        <td class="cell-strong" data-label="${t('newStock', 'New stock')}">${escapeHtml(String(m.newStock != null ? m.newStock : '—'))}</td>
-        <td class="cell-muted" data-label="${t('reason', 'Reason')}">${escapeHtml(reason) || '—'}</td>
-        <td class="cell-muted" data-label="${t('createdBy', 'Created by')}">${escapeHtml(createdByName)}</td>
+        <td class="cell-muted">${idx}</td>
+        <td class="cell-muted">${escapeHtml(fmtDateTime(m.createdAt))}</td>
+        <td class="cell-strong">${escapeHtml(productName(m.product))}</td>
+        <td>${renderTypeBadge(m.type)}</td>
+        <td>${renderQtyCell(m)}</td>
+        <td class="cell-muted">${escapeHtml(String(m.previousStock != null ? m.previousStock : '—'))}</td>
+        <td class="cell-strong">${escapeHtml(String(m.newStock != null ? m.newStock : '—'))}</td>
+        <td class="cell-muted">${escapeHtml(reason) || '—'}</td>
+        <td class="cell-muted">${escapeHtml(createdByName)}</td>
       </tr>`;
   }).join('');
 

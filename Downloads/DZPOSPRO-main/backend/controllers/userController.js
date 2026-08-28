@@ -11,7 +11,7 @@ const getUsers = async (req, res, next) => {
         const { page, limit, skip } = parsePagination(req.query);
         const filter = {};
         if (req.query.search) {
-            const r = new RegExp(String(req.query.search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+            const r = new RegExp(req.query.search, 'i');
             filter.$or = [{ name: r }, { email: r }, { phone: r }];
         }
         if (req.query.role) filter.role = req.query.role;
@@ -66,35 +66,21 @@ const createUser = async (req, res, next) => {
 // PUT /api/users/:id  (admin)
 const updateUser = async (req, res, next) => {
     try {
-        const { name, email, phone, role, isActive, settings, password } = req.body;
+        const { name, phone, role, isActive, settings, password } = req.body;
         const lang = req.lang || 'ar';
 
         const user = await User.findById(req.params.id);
         if (!user) return errorResponse(res, 404, getTranslation('userNotFound', lang));
 
         if (name !== undefined) user.name = name;
-        if (email !== undefined) {
-            const trimmedEmail = String(email).trim();
-            if (!trimmedEmail) return errorResponse(res, 400, getTranslation('missingFields', lang));
-            // Uniqueness check (case-insensitive), excluding this user
-            if (trimmedEmail.toLowerCase() !== String(user.email || '').toLowerCase()) {
-                const dup = await User.findOne({ email: { $regex: new RegExp('^' + trimmedEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i') }, _id: { $ne: user._id } });
-                if (dup) return errorResponse(res, 400, getTranslation('emailExists', lang));
-            }
-            user.email = trimmedEmail;
-        }
         if (phone !== undefined) user.phone = phone;
         if (role !== undefined) user.role = role;
         if (isActive !== undefined) user.isActive = isActive;
         if (settings) user.settings = { ...(user.settings.toObject?.() || user.settings), ...settings };
 
-        // Password reset (optional field — same rules as change-password:
-        // min 8 chars with at least one letter and one number)
-        if (password && typeof password === 'string' && password.trim() !== '') {
-            const pw = password.trim();
-            if (pw.length < 8) return errorResponse(res, 400, getTranslation('passwordTooShort', lang));
-            if (!/[A-Za-z]/.test(pw) || !/[0-9]/.test(pw)) return errorResponse(res, 400, getTranslation('passwordWeak', lang));
-            user.password = pw;
+        // Password reset (optional field — only update if a non-empty value is provided)
+        if (password && typeof password === 'string' && password.trim().length >= 6) {
+            user.password = password.trim();
         }
 
         await user.save();

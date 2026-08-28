@@ -16,14 +16,7 @@
   'use strict';
 
   // ===== استخدم API_BASE =====
-const API_BASE = (function () {
-  try {
-    const h = location.hostname;
-    const isLocal = (h === 'localhost' || h === '127.0.0.1' || h === '0.0.0.0' || location.protocol === 'file:');
-    if (isLocal) return '';
-  } catch (_) {}
-  return 'https://dzpospro-production.up.railway.app';
-})();
+const API_BASE = 'https://dzpospro-production.up.railway.app';
 
   /* ---------- Auth guard ---------- */
   const token = localStorage.getItem('token');
@@ -102,6 +95,7 @@ const API_BASE = (function () {
     categories: '<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',
     customers:  '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
     sales:      '<circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>',
+    tickets:    '<path d="M3 9a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v1a2 2 0 0 0 0 4v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1a2 2 0 0 0 0-4z"/><line x1="13" y1="7" x2="13" y2="17" stroke-dasharray="2 2"/>',
     invoices:   '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>',
     reports:    '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
     coupons:    '<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/><line x1="14" y1="14" x2="20" y2="8"/>',
@@ -127,6 +121,45 @@ const API_BASE = (function () {
     }
   }
 
+  /* ---------- Mobile table-card labels ----------
+   * At ≤480px pages.css converts every table into stacked cards using
+   * td::before { content: attr(data-label) }. Most module tables never
+   * set data-label, so the cards rendered WITHOUT labels (wide, ugly,
+   * unusable). This observer copies each <th> text into the matching
+   * <td data-label="…"> so EVERY table in the app becomes a clean,
+   * labelled card list on phones — no per-module changes needed.
+   */
+  function applyTableCardLabels(root) {
+    (root || document).querySelectorAll('table').forEach(table => {
+      if (table.dataset.labelsApplied === '1') return;
+      const headCells = Array.from(table.querySelectorAll('thead th'));
+      if (!headCells.length) return;
+      table.querySelectorAll('tbody tr').forEach(tr => {
+        if (tr.closest('thead')) return;
+        Array.from(tr.children).forEach((td, i) => {
+          if (i >= headCells.length) return;
+          const th = headCells[i];
+          const label = (th.textContent || '').trim();
+          if (label && !td.dataset.label) td.setAttribute('data-label', label);
+        });
+      });
+      table.dataset.labelsApplied = '1';
+    });
+  }
+
+  // Re-apply labels whenever the page content changes (each module renders
+  // its tables dynamically). MutationObserver is cheap: it only walks new
+  // tables and skips already-labelled ones via the dataset guard.
+  let labelObserver = null;
+  function initTableCardLabels() {
+    if (labelObserver || !('MutationObserver' in window)) return;
+    const content = document.getElementById('pageContent');
+    if (!content) return;
+    applyTableCardLabels(content);
+    labelObserver = new MutationObserver(() => applyTableCardLabels(content));
+    labelObserver.observe(content, { childList: true, subtree: true });
+  }
+
   /* ---------- Loading placeholder ---------- */
   function showLoading() {
     const content = document.getElementById('pageContent');
@@ -143,21 +176,22 @@ const API_BASE = (function () {
   // Modules owned by another agent are listed too; dynamic import
   // will fail gracefully if the file does not exist yet.
   const MODULE_MAP = {
-    dashboard:      { path: '/js/modules/dashboard.js',       fn: 'renderDashboardPage'     },
-    products:        { path: '/js/modules/products.js',        fn: 'renderProductsPage'      },
-    categories:      { path: '/js/modules/categories.js',      fn: 'renderCategoriesPage'    },
-    customers:       { path: '/js/modules/customers.js',       fn: 'renderCustomersPage'     },
-    sales:           { path: '/js/modules/sales.js',           fn: 'renderSalesPage'         },
-    invoices:        { path: '/js/modules/invoices.js',        fn: 'renderInvoicesPage'      },
-    reports:         { path: '/js/modules/reports.js',         fn: 'renderReportsPage'       },
-    coupons:         { path: '/js/modules/coupons.js',         fn: 'renderCouponsPage'       },
-    suppliers:       { path: '/js/modules/suppliers.js',       fn: 'renderSuppliersPage'     },
-    purchaseOrders:  { path: '/js/modules/purchaseOrders.js',  fn: 'renderPurchaseOrdersPage' },
-    returns:         { path: '/js/modules/returns.js',         fn: 'renderReturnsPage'       },
-    inventory:       { path: '/js/modules/inventory.js',       fn: 'renderInventoryPage'     },
-    users:           { path: '/js/modules/users.js',           fn: 'renderUsersPage'         },
-    sessions:        { path: '/js/modules/sessions.js',        fn: 'renderSessionsPage'      },
-    settings:        { path: '/js/modules/settings.js',        fn: 'renderSettingsPage'      }
+    dashboard:      { path: './modules/dashboard.js',       fn: 'renderDashboardPage'     },
+    products:        { path: './modules/products.js',        fn: 'renderProductsPage'      },
+    categories:      { path: './modules/categories.js',      fn: 'renderCategoriesPage'    },
+    customers:       { path: './modules/customers.js',       fn: 'renderCustomersPage'     },
+    sales:           { path: './modules/sales.js',           fn: 'renderSalesPage'         },
+    tickets:         { path: './modules/tickets.js',         fn: 'renderTicketsPage'       },
+    invoices:        { path: './modules/invoices.js',        fn: 'renderInvoicesPage'      },
+    reports:         { path: './modules/reports.js',         fn: 'renderReportsPage'       },
+    coupons:         { path: './modules/coupons.js',         fn: 'renderCouponsPage'       },
+    suppliers:       { path: './modules/suppliers.js',       fn: 'renderSuppliersPage'     },
+    purchaseOrders:  { path: './modules/purchaseOrders.js',  fn: 'renderPurchaseOrdersPage' },
+    returns:         { path: './modules/returns.js',         fn: 'renderReturnsPage'       },
+    inventory:       { path: './modules/inventory.js',       fn: 'renderInventoryPage'     },
+    users:           { path: './modules/users.js',           fn: 'renderUsersPage'         },
+    sessions:        { path: './modules/sessions.js',        fn: 'renderSessionsPage'      },
+    settings:        { path: './modules/settings.js',        fn: 'renderSettingsPage'      }
   };
 
 async function loadPage(page) {
@@ -173,7 +207,6 @@ async function loadPage(page) {
     try {
       // ===== تمرير API_BASE إلى الموديولات =====
       const mod = await import(spec.path);
-      if (page !== currentPage) return; // stale: user navigated elsewhere while importing
       const fn = mod[spec.fn] || mod.default;
       if (typeof fn !== 'function') {
         throw new Error('Module "' + spec.path + '" does not export "' + spec.fn + '"');
@@ -182,7 +215,6 @@ async function loadPage(page) {
       await fn.call(mod, { apiBase: API_BASE });
     } catch (err) {
       console.error('[dashboard] loadPage failed:', page, err);
-      if (page !== currentPage) return; // stale render: a newer page is active
       if (content) {
         const title = window.t ? window.t('moduleLoadError', 'تعذّر تحميل الوحدة') : 'Module load error';
         const sub = (err && err.message) ? err.message : String(err);
@@ -250,12 +282,7 @@ async function loadPage(page) {
     const tag = (e.target && e.target.tagName) || '';
     const inField = /INPUT|TEXTAREA|SELECT/.test(tag);
     if (e.key === 'F1') { e.preventDefault(); openHelpModal(); return; }
-    if (e.key === 'F2') {
-      e.preventDefault();
-      if (currentPage === 'sales') return; // POS module handles its own F2 focus
-      loadPage('sales');
-      return;
-    }
+    if (e.key === 'F2') { e.preventDefault(); loadPage('sales'); return; }
     if (e.key === 'Escape') {
       // Close topmost modal (custom .modal-overlay or SweetAlert2)
       const overlays = document.querySelectorAll('.modal-overlay');
@@ -301,22 +328,6 @@ async function loadPage(page) {
     updateThemeIcon(savedTheme);
 
     renderUserChip();
-
-    // Role-based nav visibility (backend enforces; here we just hide dead links)
-    const role = (currentUser && currentUser.role) || 'cashier';
-    const ROLE_PAGES = {
-      users:     ['admin'],
-      coupons:   ['admin', 'manager'],
-      inventory: ['admin', 'manager'],
-      returns:   ['admin', 'manager'],
-      sessions:  ['admin', 'manager'],
-      settings:  ['admin', 'manager']
-    };
-    const allowed = (page, r) => !ROLE_PAGES[page] || ROLE_PAGES[page].includes(r);
-    document.querySelectorAll('.sidebar-nav .nav-item').forEach(a => {
-      const p = a.dataset.page;
-      if (p && !allowed(p, role)) a.style.display = 'none';
-    });
 
     // Topbar
     const themeBtn = document.getElementById('themeToggle');
@@ -401,6 +412,7 @@ async function loadPage(page) {
     });
 
     // Initial render
+    initTableCardLabels();
     loadPage('dashboard');
   });
 })();

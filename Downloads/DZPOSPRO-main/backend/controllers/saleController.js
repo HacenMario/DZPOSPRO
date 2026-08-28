@@ -15,17 +15,6 @@ const { mongoose } = require('../config/db');
 
 const DEFAULT_STORE_NAME = 'DZ POS PRO';
 
-// Date-only strings (YYYY-MM-DD) are parsed as UTC instants so date-range
-// filters behave identically regardless of the server's local timezone:
-// `from` → UTC midnight, `to` → end of that UTC day (used with $lte).
-// Full ISO datetime strings parse directly as absolute instants.
-const parseDateParam = (value, endOfDay = false) => {
-    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-        return new Date(endOfDay ? `${value}T23:59:59.999Z` : `${value}T00:00:00.000Z`);
-    }
-    return new Date(value);
-};
-
 // Always read store info from the Setting document with a generic fallback.
 const getStoreInfo = async () => {
     const s = await Setting.findOne();
@@ -63,47 +52,23 @@ const getStoreInfo = async () => {
 };
 
 // Generates the next monthly invoice number atomically (within the transaction).
-// A conditional update resets the counter when the stored period differs, then a
-// $inc fetches the incremented value — no read-modify-write race.
 const generateInvoiceNumber = async (settings, customDate = new Date(), session = null) => {
     const targetDate = customDate instanceof Date && !isNaN(customDate) ? customDate : new Date();
     const year = targetDate.getFullYear();
     const month = targetDate.getMonth() + 1;
 
-    // Rollover: reset the counter to 0 only when the stored period mismatches
-    // (missing fields covered too), then increment below.
-    await Setting.findOneAndUpdate(
-        {
-            _id: settings._id,
-            $or: [
-                { currentInvoiceYear: { $ne: year } },
-                { currentInvoiceMonth: { $ne: month } },
-                { currentInvoiceYear: { $exists: false } },
-                { currentInvoiceMonth: { $exists: false } }
-            ]
-        },
-        { $set: { currentInvoiceYear: year, currentInvoiceMonth: month, currentInvoiceCounter: 0 } },
-        { session }
-    );
-
-    let updated = await Setting.findOneAndUpdate(
-        { _id: settings._id },
-        { $inc: { currentInvoiceCounter: 1 } },
-        { new: true, session }
-    );
-    if (!updated) {
-        // Settings doc not persisted yet (first ever sale) — create it.
+    if (settings.currentInvoiceYear !== year || settings.currentInvoiceMonth !== month) {
         settings.currentInvoiceYear = year;
         settings.currentInvoiceMonth = month;
-        settings.currentInvoiceCounter = 1;
-        await settings.save({ session });
-        updated = settings;
+        settings.currentInvoiceCounter = 0;
     }
+    settings.currentInvoiceCounter += 1;
+    await settings.save({ session });
 
     const yearStr = String(year);
     const monthStr = String(month).padStart(2, '0');
-    const counterStr = String(updated.currentInvoiceCounter).padStart(5, '0');
-    return `${updated.invoicePrefix || 'INV-'}${yearStr}/${monthStr}/${counterStr}`;
+    const counterStr = String(settings.currentInvoiceCounter).padStart(5, '0');
+    return `${settings.invoicePrefix || 'INV-'}${yearStr}/${monthStr}/${counterStr}`;
 };
 
 // Validate + compute discount for a coupon, returns { coupon, discount }
@@ -113,8 +78,7 @@ const applyCouponInternal = async (code, cartTotal) => {
 
     const now = new Date();
     if (now < coupon.validFrom || now > coupon.validUntil) return { coupon, discount: 0, error: 'couponExpired' };
-    // usageLimit 0 = unlimited
-    if (coupon.usageLimit > 0 && coupon.usedCount >= coupon.usageLimit) return { coupon, discount: 0, error: 'couponUsedUp' };
+    if (coupon.usedCount >= coupon.usageLimit) return { coupon, discount: 0, error: 'couponUsedUp' };
     if (cartTotal < coupon.minOrder) return { coupon, discount: 0, error: 'couponMinOrder' };
 
     let discount = 0;
@@ -157,18 +121,11 @@ const createSale = async (req, res, next) => {
             return errorResponse(res, 401, getTranslation('unauthorized', lang));
         }
 
-        // Only the session owner (or an admin/manager) may sell against a session.
-        const canUseSession = (doc) => String(doc.user) === String(req.userId)
-            || ['admin', 'manager'].includes(req.userRole || '');
-
         let sessionDoc = null;
         if (sessionId) {
             sessionDoc = await Session.findById(sessionId);
             if (!sessionDoc || sessionDoc.status !== 'open') {
                 return errorResponse(res, 403, getTranslation('sessionRequired', lang));
-            }
-            if (!canUseSession(sessionDoc)) {
-                return errorResponse(res, 403, getTranslation('forbidden', lang));
             }
         } else {
             sessionDoc = await Session.findOne({ user: req.userId, status: 'open' });
@@ -204,7 +161,8 @@ const createSale = async (req, res, next) => {
             for (const item of items) {
                 const productId = item.product || item.productId;
                 const qty = Number(item.quantity);
-                if (!productId || !Number.isFinite(qty) || qty < 1) {
+                const unitPrice = Number(item.price);
+                if (!productId || !Number.isFinite(qty) || qty < 1 || !Number.isFinite(unitPrice)) {
                     throw Object.assign(new Error('Invalid item payload'), { statusCode: 400, expose: true });
                 }
                 const product = await Product.findById(productId).session(txnSession);
@@ -213,12 +171,6 @@ const createSale = async (req, res, next) => {
                 }
                 if (product.stock < qty) {
                     throw Object.assign(new Error(`${product.getName(lang)}: ${getTranslation('insufficientStock', lang)}`), { statusCode: 400, expose: true });
-                }
-                // Unit price is always the server-side product price — the POS
-                // never edits prices, so the client-sent item.price is ignored.
-                const unitPrice = Number(product.price) || 0;
-                if (!Number.isFinite(unitPrice)) {
-                    throw Object.assign(new Error('Invalid item payload'), { statusCode: 400, expose: true });
                 }
 
                 const itemDiscount = Number(item.discount) || 0;
@@ -271,17 +223,12 @@ const createSale = async (req, res, next) => {
                 }
                 couponDoc = r.coupon;
                 couponDiscount = r.discount;
-                // Atomically consume one use — the filter re-checks the limit so
-                // concurrent checkouts can never exceed it. usageLimit 0 = unlimited.
                 if (couponDoc) {
-                    const inc = await Coupon.updateOne(
-                        { _id: couponDoc._id, $or: [{ usageLimit: 0 }, { $expr: { $lt: ['$usedCount', '$usageLimit'] } }] },
+                    await Coupon.updateOne(
+                        { _id: couponDoc._id, usedCount: { $lt: couponDoc.usageLimit } },
                         { $inc: { usedCount: 1 } },
                         { session: txnSession }
                     );
-                    if (inc.modifiedCount !== 1) {
-                        throw Object.assign(new Error(getTranslation('couponUsedUp', lang)), { statusCode: 400, expose: true });
-                    }
                 }
             }
 
@@ -419,8 +366,14 @@ const getSales = async (req, res, next) => {
         if (session) filter.session = session;
         if (from || to) {
             filter.saleDate = {};
-            if (from) filter.saleDate.$gte = parseDateParam(from);
-            if (to) filter.saleDate.$lte = parseDateParam(to, true);
+            if (from) filter.saleDate.$gte = new Date(from);
+            if (to) {
+                const toDate = new Date(to);
+                if (toDate.getHours() === 0 && toDate.getMinutes() === 0 && toDate.getSeconds() === 0 && toDate.getMilliseconds() === 0) {
+                    toDate.setHours(23, 59, 59, 999);
+                }
+                filter.saleDate.$lte = toDate;
+            }
         }
 
         let matchedCustomerIds = null;
@@ -451,7 +404,7 @@ const getSales = async (req, res, next) => {
         const [docs, total] = await Promise.all([
             Sale.find(filter)
                 .populate('customer', 'name phone')
-                .populate({ path: 'items', select: 'product quantity returnedQuantity price total timbre discount productName productUnit productBarcode', populate: { path: 'product', select: 'name price barcode timbre unit' } })
+                .populate({ path: 'items', select: 'product quantity price total timbre discount productName productUnit productBarcode', populate: { path: 'product', select: 'name price barcode timbre unit' } })
                 .populate('session', 'userName openingBalance')
                 .sort({ saleDate: -1, createdAt: -1 })
                 .skip(skip).limit(limit),
@@ -513,12 +466,8 @@ const updateSaleStatus = async (req, res, next) => {
     try {
         const lang = req.lang || 'ar';
         const { status } = req.body;
-        const allowed = ['completed', 'pending'];
+        const allowed = ['completed', 'pending', 'cancelled'];
         if (!allowed.includes(status)) {
-            if (status === 'cancelled') {
-                // Cancelling via PATCH loses stock — DELETE (cancelSale) restores it.
-                return errorResponse(res, 400, 'Use DELETE /api/sales/:id to cancel a sale — stock must be restored');
-            }
             return errorResponse(res, 400, getTranslation('invalidSaleStatus', lang));
         }
 
@@ -570,26 +519,6 @@ const cancelSale = async (req, res, next) => {
                     }], { session });
                 }
             }
-
-            // Revert customer aggregates (clamped at 0 to avoid negative drift)
-            if (sale.customer) {
-                const customer = await Customer.findById(sale.customer).session(session);
-                if (customer) {
-                    customer.totalSpent = Math.max(0, (customer.totalSpent || 0) - (sale.total || 0));
-                    customer.loyaltyPoints = Math.max(0, (customer.loyaltyPoints || 0) - Math.floor((sale.total || 0) / 100));
-                    await customer.save({ session });
-                }
-            }
-
-            // Release one coupon usage (clamped at 0)
-            if (sale.coupon) {
-                const coupon = await Coupon.findById(sale.coupon).session(session);
-                if (coupon && (coupon.usedCount || 0) > 0) {
-                    coupon.usedCount = coupon.usedCount - 1;
-                    await coupon.save({ session });
-                }
-            }
-
             sale.status = 'cancelled';
             await sale.save({ session });
         };
