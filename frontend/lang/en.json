@@ -628,5 +628,19 @@
   "stepSelectCustomer": "Step 1 — customer",
   "change": "Change",
   "qty": "Qty",
-  "unitPrice": "Unit price"
+  "unitPrice": "Unit price",
+  "importCsv": "Import CSV",
+  "csvImportTitle": "Import products from a CSV file",
+  "csvImportHint": "Supported columns: id, name (required), description, barcode, sku, category, price (required), costPrice, stock, minStock, unit, tax, timbre, status. Existing products are matched by id, then barcode, then sku; unmatched rows are added as new products and missing categories are created automatically. Export your products or download the template, edit the file, then import it back.",
+  "csvChooseFile": "Choose a CSV file",
+  "csvDownloadTemplate": "Download CSV template",
+  "csvImportCreated": "created",
+  "csvImportUpdated": "updated",
+  "csvImportSkipped": "skipped",
+  "csvImportErrors": "errors",
+  "csvExporting": "Exporting...",
+  "csvImporting": "Importing...",
+  "csvImportDone": "Products imported successfully",
+  "csvImportFailed": "Import failed",
+  "csvRow": "Row"
 }

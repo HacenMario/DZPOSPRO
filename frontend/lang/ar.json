@@ -628,5 +628,19 @@
   "stepSelectCustomer": "الخطوة 1 — العميل",
   "change": "تغيير",
   "qty": "الكمية",
-  "unitPrice": "سعر الوحدة"
+  "unitPrice": "سعر الوحدة",
+  "importCsv": "استيراد CSV",
+  "csvImportTitle": "استيراد المنتجات من ملف CSV",
+  "csvImportHint": "الأعمدة المدعومة: id, name (مطلوب), description, barcode, sku, category, price (مطلوب), costPrice, stock, minStock, unit, tax, timbre, status. تُطابَق المنتجات الموجودة عبر id ثم barcode ثم sku، وما لا يطابق يُضاف كمنتج جديد، والفئات غير الموجودة تُنشأ تلقائياً. يمكنك تصدير منتجاتك أو تنزيل القالب ثم تعديل الملف وإعادة استيراده.",
+  "csvChooseFile": "اختر ملف CSV",
+  "csvDownloadTemplate": "تحميل قالب CSV",
+  "csvImportCreated": "أُضيفت",
+  "csvImportUpdated": "حُدّثت",
+  "csvImportSkipped": "تم تجاهلها",
+  "csvImportErrors": "أخطاء",
+  "csvExporting": "جارٍ التصدير...",
+  "csvImporting": "جارٍ الاستيراد...",
+  "csvImportDone": "تم استيراد المنتجات بنجاح",
+  "csvImportFailed": "فشل الاستيراد",
+  "csvRow": "السطر"
 }

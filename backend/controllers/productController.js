@@ -6,6 +6,7 @@ const { getTranslation } = require('../config/i18n');
 const logger = require('../utils/logger');
 const { successResponse, createdResponse, errorResponse, paginatedResponse } = require('../utils/response');
 const { parsePagination } = require('../utils/pagination');
+const { parseCsv, toCsv } = require('../utils/csv');
 const fs = require('fs');
 const path = require('path');
 
@@ -379,6 +380,268 @@ const getLowStockProducts = async (req, res, next) => {
     }
 };
 
+// GET /api/products/export → downloads every product as a CSV file.
+// Columns mirror importProducts below (id,name,description,barcode,sku,
+// category,price,costPrice,stock,minStock,unit,tax,timbre,status) so an
+// exported file can be edited and imported back (round-trip safe via id).
+const exportProducts = async (req, res, next) => {
+    try {
+        const lang = req.lang || 'ar';
+        const products = await Product.find({}).populate('category', 'name').sort({ createdAt: 1 });
+
+        const headers = ['id', 'name', 'description', 'barcode', 'sku', 'category',
+            'price', 'costPrice', 'stock', 'minStock', 'unit', 'tax', 'timbre', 'status'];
+        const rows = products.map(p => [
+            String(p._id),
+            p.getName ? p.getName(lang) : (p.name?.ar || p.name?.en || p.name?.fr || ''),
+            p.getDescription ? p.getDescription(lang) : (p.description?.ar || ''),
+            p.barcode || '',
+            p.sku || '',
+            p.category && typeof p.category === 'object'
+                ? (p.category.getName ? p.category.getName(lang) : (p.category.name?.ar || ''))
+                : '',
+            Number(p.price || 0).toFixed(2),
+            Number(p.costPrice || 0).toFixed(2),
+            String(p.stock || 0),
+            String(p.minStock == null ? 5 : p.minStock),
+            p.unit || 'pcs',
+            Number(p.tax || 0).toFixed(2),
+            Number(p.timbre || 0).toFixed(2),
+            p.status || 'active'
+        ]);
+
+        const csv = '\uFEFF' + toCsv(headers, rows); // BOM so Excel keeps Arabic readable
+        const stamp = new Date().toISOString().slice(0, 10);
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="products-${stamp}.csv"`);
+        return res.status(200).send(csv);
+    } catch (err) {
+        logger.error('exportProducts error:', err.message);
+        next(err);
+    }
+};
+
+// POST /api/products/import  (multipart field: file)
+// Accepts a CSV file using the same columns as exportProducts. Existing
+// products are matched by id → barcode → sku (updated in place); rows with
+// no match are created as new products. Categories are resolved by ObjectId
+// or name (any language, case-insensitive) and auto-created when missing.
+// Returns a per-row report: { created, updated, skipped, errors[] }.
+const CSV_ALIASES = {
+    id: ['id', '_id'],
+    name: ['name', 'nom', 'الاسم', 'اسم المنتج', 'productname'],
+    description: ['description', 'وصف', 'الوصف'],
+    barcode: ['barcode', 'codebarre', 'codebarres', 'code-barres', 'الباركود', 'باركود'],
+    sku: ['sku', 'رمز المنتج'],
+    category: ['category', 'categorie', 'catégorie', 'الفئة', 'التصنيف'],
+    price: ['price', 'prix', 'السعر'],
+    costPrice: ['costprice', 'cost', 'prixachat', 'prix d’achat', 'سعر الشراء', 'التكلفة'],
+    stock: ['stock', 'quantity', 'qty', 'المخزون', 'الكمية'],
+    minStock: ['minstock', 'minstocklevel', 'الحد الادنى', 'الحد الأدنى للمخزون'],
+    unit: ['unit', 'unite', 'unité', 'الوحدة'],
+    tax: ['tax', 'tva', 'الضريبة'],
+    timbre: ['timbre', 'stamp', 'الطابع', 'الطابع الجبائي'],
+    status: ['status', 'statut', 'الحالة']
+};
+
+const importProducts = async (req, res, next) => {
+    try {
+        const lang = req.lang || 'ar';
+        if (!req.file || !req.file.buffer || !req.file.buffer.length) {
+            return errorResponse(res, 400, getTranslation('csvFileRequired', lang));
+        }
+
+        const rows = parseCsv(req.file.buffer.toString('utf8'));
+        if (!rows.length || !rows[0].length) {
+            return errorResponse(res, 400, getTranslation('csvEmpty', lang));
+        }
+
+        // Map header names (case-insensitive, BOM-safe) to column indexes.
+        const headerRow = rows[0].map(h => String(h || '').replace(/\uFEFF/g, '').trim().toLowerCase());
+        const col = {};
+        for (const [key, aliases] of Object.entries(CSV_ALIASES)) {
+            const idx = headerRow.findIndex(h => aliases.includes(h));
+            if (idx !== -1) col[key] = idx;
+        }
+        if (col.name === undefined || col.price === undefined) {
+            return errorResponse(res, 400, getTranslation('csvMissingColumns', lang));
+        }
+
+        const cell = (cells, key) =>
+            (col[key] !== undefined && cells[col[key]] !== undefined) ? String(cells[col[key]]).trim() : '';
+        const num = s => parseFloat(String(s || '').replace(',', '.'));
+        const norm = s => String(s || '').trim().toLowerCase();
+
+        const categories = await Category.find({});
+        const findCategory = (val) => categories.find(c =>
+            String(c._id) === val ||
+            norm(c.name?.ar) === norm(val) ||
+            norm(c.name?.en) === norm(val) ||
+            norm(c.name?.fr) === norm(val));
+
+        let created = 0, updated = 0, skipped = 0;
+        const errors = [];
+        const rowError = (rowNum, key, extra) =>
+            errors.push({ row: rowNum, message: `${getTranslation('csvRow', lang)} ${rowNum}: ${getTranslation(key, lang)}${extra ? ' (' + extra + ')' : ''}` });
+
+        for (let r = 1; r < rows.length; r++) {
+            const cells = rows[r];
+            if (!cells || cells.every(c => !String(c || '').trim())) continue; // blank line
+            const rowNum = r + 1;
+            try {
+                const name = cell(cells, 'name');
+                if (!name) { rowError(rowNum, 'csvNameRequired'); skipped++; continue; }
+
+                const price = num(cell(cells, 'price'));
+                if (isNaN(price) || price < 0) { rowError(rowNum, 'csvPriceInvalid'); skipped++; continue; }
+
+                const stockRaw = cell(cells, 'stock');
+                let stock = null;
+                if (stockRaw !== '') {
+                    stock = parseInt(stockRaw, 10);
+                    if (isNaN(stock) || stock < 0) { rowError(rowNum, 'csvStockInvalid'); skipped++; continue; }
+                }
+
+                const statusRaw = norm(cell(cells, 'status'));
+                let status = 'active';
+                if (statusRaw && statusRaw !== 'active' && statusRaw !== 'inactive') {
+                    rowError(rowNum, 'csvStatusInvalid'); skipped++; continue;
+                } else if (statusRaw) {
+                    status = statusRaw;
+                }
+
+                const description = cell(cells, 'description');
+                const barcode = cell(cells, 'barcode');
+                const sku = cell(cells, 'sku');
+                const categoryVal = cell(cells, 'category');
+                const costPrice = num(cell(cells, 'costPrice')) || 0;
+                const minStockRaw = parseInt(cell(cells, 'minStock'), 10);
+                const minStock = isNaN(minStockRaw) ? null : minStockRaw;
+                const unit = cell(cells, 'unit');
+                const tax = num(cell(cells, 'tax')) || 0;
+                const timbre = num(cell(cells, 'timbre')) || 0;
+
+                // Resolve (or auto-create) the category
+                let categoryId = null;
+                if (categoryVal) {
+                    let cat = findCategory(categoryVal);
+                    if (!cat) {
+                        cat = await Category.create({
+                            name: { ar: categoryVal, en: categoryVal, fr: categoryVal },
+                            createdBy: req.userId
+                        });
+                        categories.push(cat);
+                    }
+                    categoryId = cat._id;
+                }
+
+                // Find the target product: id → barcode → sku
+                let product = null;
+                const idVal = cell(cells, 'id');
+                if (idVal && /^[0-9a-fA-F]{24}$/.test(idVal)) {
+                    product = await Product.findById(idVal);
+                }
+                if (!product && barcode) product = await Product.findOne({ barcode });
+                if (!product && sku) product = await Product.findOne({ sku });
+
+                // Duplicate guards: never steal barcode/sku from another product
+                if (barcode) {
+                    const dup = await Product.findOne({ barcode });
+                    if (dup && (!product || String(dup._id) !== String(product._id))) {
+                        rowError(rowNum, 'barcodeExists', barcode);
+                        skipped++; continue;
+                    }
+                }
+                if (sku) {
+                    const dup = await Product.findOne({ sku });
+                    if (dup && (!product || String(dup._id) !== String(product._id))) {
+                        rowError(rowNum, 'skuExists', sku);
+                        skipped++; continue;
+                    }
+                }
+
+                if (product) {
+                    // ----- update (only columns present in the file) -----
+                    product.name = { ar: name, en: name, fr: name };
+                    product.price = price;
+                    if (col.description !== undefined) product.description = { ar: description, en: description, fr: description };
+                    if (col.costPrice !== undefined) product.costPrice = costPrice;
+                    if (col.category !== undefined) product.category = categoryId;
+                    if (col.barcode !== undefined) product.barcode = barcode || undefined;
+                    if (col.sku !== undefined) product.sku = sku || undefined;
+                    if (col.minStock !== undefined && minStock !== null) product.minStock = minStock;
+                    if (col.unit !== undefined && unit) product.unit = unit;
+                    if (col.tax !== undefined) product.tax = tax;
+                    if (col.timbre !== undefined) product.timbre = timbre;
+                    if (col.status !== undefined) product.status = status;
+                    if (stock !== null && stock !== product.stock) {
+                        const prev = product.stock;
+                        product.stock = stock;
+                        await InventoryMovement.create({
+                            product: product._id,
+                            type: 'adjust',
+                            quantity: Math.abs(stock - prev),
+                            previousStock: prev,
+                            newStock: stock,
+                            reason: { ar: 'استيراد CSV', en: 'CSV import', fr: 'Importation CSV' },
+                            reference: 'csv-import',
+                            createdBy: req.userId
+                        });
+                    }
+                    product.updatedBy = req.userId;
+                    await product.save();
+                    updated++;
+                } else {
+                    // ----- create -----
+                    const newProduct = new Product({
+                        name: { ar: name, en: name, fr: name },
+                        description: { ar: description, en: description, fr: description },
+                        price,
+                        costPrice,
+                        category: categoryId,
+                        barcode: barcode || undefined,
+                        sku: sku || undefined,
+                        stock: stock || 0,
+                        minStock: minStock == null ? 5 : minStock,
+                        unit: unit || 'pcs',
+                        tax,
+                        timbre,
+                        status,
+                        createdBy: req.userId
+                    });
+                    await newProduct.save();
+                    if (newProduct.stock > 0) {
+                        await InventoryMovement.create({
+                            product: newProduct._id,
+                            type: 'in',
+                            quantity: newProduct.stock,
+                            previousStock: 0,
+                            newStock: newProduct.stock,
+                            reason: { ar: 'الرصيد الافتتاحي', en: 'Opening stock', fr: 'Stock initial' },
+                            reference: 'csv-import',
+                            createdBy: req.userId
+                        });
+                    }
+                    created++;
+                }
+            } catch (rowErr) {
+                logger.warn(`importProducts row ${rowNum}: ${rowErr.message}`);
+                errors.push({ row: rowNum, message: `${getTranslation('csvRow', lang)} ${rowNum}: ${rowErr.message}` });
+                skipped++;
+            }
+        }
+
+        return successResponse(res, {
+            total: created + updated + skipped,
+            created, updated, skipped,
+            errors: errors.slice(0, 100)
+        }, getTranslation('importCompleted', lang));
+    } catch (err) {
+        logger.error('importProducts error:', err.message);
+        next(err);
+    }
+};
+
 module.exports = {
     createProduct,
     getProducts,
@@ -387,5 +650,7 @@ module.exports = {
     updateProduct,
     deleteProduct,
     updateStock,
-    getLowStockProducts
+    getLowStockProducts,
+    exportProducts,
+    importProducts
 };

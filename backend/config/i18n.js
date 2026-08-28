@@ -42,6 +42,17 @@ const translations = {
         insufficientStock: 'الكمية غير متوفرة',
         invalidMovementType: 'نوع الحركة غير صحيح (in/out/adjust)',
 
+        // Products CSV import/export
+        importCompleted: 'اكتمل استيراد المنتجات',
+        csvFileRequired: 'يرجى اختيار ملف CSV صالح',
+        csvEmpty: 'الملف فارغ',
+        csvMissingColumns: 'الأعمدة المطلوبة غير موجودة في الملف: name، price',
+        csvRow: 'السطر',
+        csvNameRequired: 'الاسم مطلوب',
+        csvPriceInvalid: 'السعر غير صالح',
+        csvStockInvalid: 'المخزون غير صالح',
+        csvStatusInvalid: 'الحالة يجب أن تكون active أو inactive',
+
         // Categories
         categoryCreated: 'تم إنشاء الفئة بنجاح',
         categoryUpdated: 'تم تحديث الفئة بنجاح',
@@ -155,6 +166,17 @@ const translations = {
         insufficientStock: 'Insufficient stock',
         invalidMovementType: 'Invalid movement type (in/out/adjust)',
 
+        // Products CSV import/export
+        importCompleted: 'Product import completed',
+        csvFileRequired: 'Please choose a valid CSV file',
+        csvEmpty: 'The file is empty',
+        csvMissingColumns: 'Required columns missing from the file: name, price',
+        csvRow: 'Row',
+        csvNameRequired: 'name is required',
+        csvPriceInvalid: 'price is invalid',
+        csvStockInvalid: 'stock is invalid',
+        csvStatusInvalid: 'status must be active or inactive',
+
         // Categories
         categoryCreated: 'Category created successfully',
         categoryUpdated: 'Category updated successfully',
@@ -267,6 +289,17 @@ const translations = {
         stockUpdated: 'Stock mis à jour avec succès',
         insufficientStock: 'Stock insuffisant',
         invalidMovementType: 'Type de mouvement invalide (in/out/adjust)',
+
+        // Produits — import/export CSV
+        importCompleted: 'Importation des produits terminée',
+        csvFileRequired: 'Veuillez choisir un fichier CSV valide',
+        csvEmpty: 'Le fichier est vide',
+        csvMissingColumns: 'Colonnes obligatoires manquantes dans le fichier : name, price',
+        csvRow: 'Ligne',
+        csvNameRequired: 'le nom est requis',
+        csvPriceInvalid: 'prix invalide',
+        csvStockInvalid: 'stock invalide',
+        csvStatusInvalid: 'le statut doit être active ou inactive',
 
         // Catégories
         categoryCreated: 'Catégorie créée avec succès',

@@ -17,6 +17,10 @@
 
 const apiFetch = window.apiFetch;
 const t = (k, fb) => (typeof window.t === 'function' ? window.t(k, fb) : (fb || k));
+import API_BASE from '../config.js';
+
+// CSV round-trip column order — MUST stay in sync with backend exportProducts/importProducts
+const CSV_HEADERS = ['id', 'name', 'description', 'barcode', 'sku', 'category', 'price', 'costPrice', 'stock', 'minStock', 'unit', 'tax', 'timbre', 'status'];
 
 let state = {
   page: 1,
@@ -109,6 +113,14 @@ function renderToolbar() {
         <button class="btn btn-secondary btn-sm" id="productRefreshBtn" type="button">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
           <span>${t('refresh', 'Refresh')}</span>
+        </button>
+        <button class="btn btn-secondary btn-sm" id="exportProductsBtn" type="button" title="${t('exportCsv', 'Export CSV')}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>${t('exportCsv', 'Export CSV')}</span>
+        </button>
+        <button class="btn btn-secondary btn-sm" id="importProductsBtn" type="button" title="${t('importCsv', 'Import CSV')}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <span>${t('importCsv', 'Import CSV')}</span>
         </button>
         <button class="btn btn-primary" id="addProductBtn" type="button">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -378,6 +390,10 @@ function bindToolbar() {
   if (emptyAdd) emptyAdd.addEventListener('click', () => openProductModal(null));
   const refresh = document.getElementById('productRefreshBtn');
   if (refresh) refresh.addEventListener('click', () => refreshTable());
+  const exportBtn = document.getElementById('exportProductsBtn');
+  if (exportBtn) exportBtn.addEventListener('click', exportProductsCsv);
+  const importBtn = document.getElementById('importProductsBtn');
+  if (importBtn) importBtn.addEventListener('click', openImportModal);
 }
 
 function bindTable() {
@@ -696,6 +712,176 @@ function openProductModal(product) {
   
   // ✅ تنفيذ التحميل ثم فتح النافذة
   loadAndOpen();
+}
+
+/* ---------- CSV export ---------- */
+function csvCell(v) {
+  const s = (v === undefined || v === null) ? '' : String(v);
+  return /[",;\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+async function exportProductsCsv() {
+  const btn = document.getElementById('exportProductsBtn');
+  const setBusy = (busy) => {
+    if (!btn) return;
+    btn.disabled = busy;
+    const lbl = btn.querySelector('span');
+    if (lbl) {
+      if (busy) { lbl.dataset.orig = lbl.textContent; lbl.textContent = t('csvExporting', 'Exporting...'); }
+      else if (lbl.dataset.orig) { lbl.textContent = lbl.dataset.orig; delete lbl.dataset.orig; }
+    }
+  };
+  setBusy(true);
+  try {
+    const token = localStorage.getItem('token');
+    const res = await fetch(API_BASE + '/api/products/export', { headers: { 'Authorization': 'Bearer ' + (token || '') } });
+    if (!res.ok) {
+      let msg = 'HTTP ' + res.status;
+      try { const j = await res.json(); if (j && j.message) msg = j.message; } catch (_) {}
+      throw new Error(msg);
+    }
+    const blob = await res.blob();
+    const d = new Date();
+    const stamp = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    downloadBlob(blob, 'products-' + stamp + '.csv');
+    if (window.Toast) window.Toast.success(t('exportDone', 'Export ready'));
+  } catch (e) {
+    console.error('[products] export error:', e);
+    if (window.Toast) window.Toast.error((e && e.message) || t('error', 'Error'));
+  } finally {
+    setBusy(false);
+  }
+}
+
+/* ---------- CSV import ---------- */
+function downloadCsvTemplate() {
+  const sample = ['', 'Sample product', 'Product description', '1234567890123', 'SKU-001', 'Category name', '250.00', '150.00', '10', '5', 'pcs', '19', '0', 'active'];
+  const csv = '\uFEFF' + CSV_HEADERS.join(',') + '\r\n' + sample.map(csvCell).join(',');
+  downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8;' }), 'products-template.csv');
+}
+
+function openImportModal() {
+  document.querySelectorAll('#importProductsModal').forEach(m => m.remove());
+
+  const html = `
+      <div class="modal-overlay" id="importProductsModal" role="dialog" aria-modal="true" aria-labelledby="importModalTitle">
+        <div class="modal" role="document">
+          <div class="modal-header">
+            <div class="modal-title" id="importModalTitle">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <span>${t('csvImportTitle', 'Import products from a CSV file')}</span>
+            </div>
+            <button class="modal-close" type="button" aria-label="${t('close', 'Close')}">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          <div class="modal-body">
+            <p class="help-text" style="margin:0 0 0.75rem;line-height:1.6;">${t('csvImportHint', '')}</p>
+            <div style="margin-bottom:0.9rem;">
+              <button class="btn btn-ghost btn-sm" id="csvTemplateBtn" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                <span>${t('csvDownloadTemplate', 'Download CSV template')}</span>
+              </button>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="csvFileInput">${t('csvChooseFile', 'Choose a CSV file')}</label>
+              <input class="input" id="csvFileInput" type="file" accept=".csv,text/csv" />
+            </div>
+            <div id="csvImportResult" style="display:none;"></div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-ghost" type="button" data-action="cancel">${t('cancel', 'Cancel')}</button>
+            <button class="btn btn-primary" type="button" id="csvImportSubmit">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <span>${t('importCsv', 'Import CSV')}</span>
+            </button>
+          </div>
+        </div>
+      </div>`;
+
+  document.body.insertAdjacentHTML('beforeend', html);
+  const overlay = document.getElementById('importProductsModal');
+
+  function close() { overlay.remove(); }
+  overlay.querySelector('.modal-close').addEventListener('click', close);
+  overlay.querySelector('[data-action="cancel"]').addEventListener('click', close);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+  const templateBtn = overlay.querySelector('#csvTemplateBtn');
+  if (templateBtn) templateBtn.addEventListener('click', downloadCsvTemplate);
+
+  const submitBtn = overlay.querySelector('#csvImportSubmit');
+  if (submitBtn) submitBtn.addEventListener('click', () => submitCsvImport(overlay));
+
+  setTimeout(() => { const f = overlay.querySelector('#csvFileInput'); if (f) f.focus(); }, 50);
+}
+
+function showImportResult(overlay, d) {
+  const box = overlay.querySelector('#csvImportResult');
+  if (!box) return;
+  const created = Number(d.created || 0);
+  const updated = Number(d.updated || 0);
+  const skipped = Number(d.skipped || 0);
+  const errors = Array.isArray(d.errors) ? d.errors : [];
+  const badge = (cls, txt) => '<span class="badge ' + cls + '">' + txt + '</span>';
+  let html =
+    '<div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin:0.75rem 0 0.25rem;">' +
+      badge('badge-success', created + ' ' + t('csvImportCreated', 'created')) +
+      badge('badge-primary', updated + ' ' + t('csvImportUpdated', 'updated')) +
+      (skipped ? badge('badge-danger', skipped + ' ' + t('csvImportSkipped', 'skipped')) : '') +
+    '</div>';
+  if (errors.length) {
+    html += '<div style="margin-top:0.5rem;padding:0.6rem 0.75rem;background:var(--bg-secondary, rgba(0,0,0,0.04));border-radius:8px;max-height:160px;overflow:auto;font-size:0.85rem;">';
+    errors.forEach(e => {
+      html += '<div style="margin:0.15rem 0;">' + escapeHtml(String(e.message || '')) + '</div>';
+    });
+    html += '</div>';
+  }
+  box.innerHTML = html;
+  box.style.display = 'block';
+}
+
+async function submitCsvImport(overlay) {
+  const input = overlay.querySelector('#csvFileInput');
+  const file = input && input.files && input.files[0];
+  if (!file) {
+    if (window.Toast) window.Toast.warning(t('csvChooseFile', 'Choose a CSV file'));
+    return;
+  }
+  const btn = overlay.querySelector('#csvImportSubmit');
+  const lbl = btn ? btn.querySelector('span') : null;
+  if (btn) btn.disabled = true;
+  if (lbl) { lbl.dataset.orig = lbl.textContent; lbl.textContent = t('csvImporting', 'Importing...'); }
+  try {
+    const fd = new FormData();
+    fd.append('file', file, file.name || 'products.csv');
+    const r = await apiFetch.post('/api/products/import', fd);
+    if (r && r.success) {
+      const d = r.data || {};
+      showImportResult(overlay, d);
+      if (window.Toast) window.Toast.success(r.message || t('csvImportDone', 'Products imported successfully'));
+      await refreshTable();
+    } else {
+      throw new Error((r && r.message) || t('csvImportFailed', 'Import failed'));
+    }
+  } catch (e) {
+    console.error('[products] import error:', e);
+    if (window.Toast) window.Toast.error((e && e.message) || t('csvImportFailed', 'Import failed'));
+  } finally {
+    if (btn) btn.disabled = false;
+    if (lbl && lbl.dataset.orig) { lbl.textContent = lbl.dataset.orig; delete lbl.dataset.orig; }
+  }
 }
 
 /* ---------- Entry ---------- */

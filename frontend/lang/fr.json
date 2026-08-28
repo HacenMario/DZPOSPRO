@@ -628,5 +628,19 @@
   "stepSelectCustomer": "Étape 1 — client",
   "change": "Modifier",
   "qty": "Qté",
-  "unitPrice": "Prix unitaire"
+  "unitPrice": "Prix unitaire",
+  "importCsv": "Importer CSV",
+  "csvImportTitle": "Importer des produits depuis un fichier CSV",
+  "csvImportHint": "Colonnes prises en charge : id, name (obligatoire), description, barcode, sku, category, price (obligatoire), costPrice, stock, minStock, unit, tax, timbre, status. Les produits existants sont reconnus par id, puis barcode, puis sku ; les lignes sans correspondance sont ajoutées comme nouveaux produits et les catégories manquantes sont créées automatiquement. Exportez vos produits ou téléchargez le modèle, modifiez le fichier puis réimportez-le.",
+  "csvChooseFile": "Choisir un fichier CSV",
+  "csvDownloadTemplate": "Télécharger le modèle CSV",
+  "csvImportCreated": "créés",
+  "csvImportUpdated": "mis à jour",
+  "csvImportSkipped": "ignorés",
+  "csvImportErrors": "erreurs",
+  "csvExporting": "Exportation...",
+  "csvImporting": "Importation...",
+  "csvImportDone": "Produits importés avec succès",
+  "csvImportFailed": "Échec de l'importation",
+  "csvRow": "Ligne"
 }
