@@ -160,7 +160,7 @@ function renderTable() {
       : '<span class="badge badge-primary">' + t('active', 'Active') + '</span>';
     
     const thumb = p.images && p.images.length
-      ? '<img class="cell-thumb" src="' + escapeHtml(p.images[0]) + '" alt="" loading="lazy" />'
+      ? '<img class="cell-thumb" src="' + escapeHtml(window.resolveAssetUrl ? window.resolveAssetUrl(p.images[0]) : p.images[0]) + '" alt="" loading="lazy" />'
       : '<div class="cell-thumb-placeholder" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>';
     
     const idx = (state.page - 1) * state.limit + i + 1;
@@ -524,7 +524,7 @@ function openProductModal(product) {
                 </div>
                 <div class="form-group">
                   <label class="form-label">${t('unit', 'Unit')}</label>
-                  <input class="input" id="unit" type="text" value="${product && product.unit ? escapeHtml(product.unit) : 'قطعة'}" />
+                  <input class="input" id="unit" type="text" value="${product && product.unit ? escapeHtml(product.unit) : ''}" />
                 </div>
                 <div class="form-group">
                   <label class="form-label">${t('timbre', 'Timbre')}</label>
@@ -593,7 +593,7 @@ function openProductModal(product) {
         const wrap = document.createElement('div');
         wrap.style.cssText = 'position:relative;width:64px;height:64px;';
         const img = document.createElement('img');
-        img.src = src; img.alt = '';
+        img.src = (window.resolveAssetUrl ? window.resolveAssetUrl(src) : src); img.alt = '';
         img.style.cssText = 'width:64px;height:64px;border-radius:8px;object-fit:cover;border:1px solid var(--border-color);';
         const del = document.createElement('button');
         del.type = 'button';
@@ -645,7 +645,7 @@ function openProductModal(product) {
         minStock: parseInt(overlay.querySelector('#minStock').value, 10) || 0,
         barcode: overlay.querySelector('#barcode').value.trim() || undefined,
         sku: overlay.querySelector('#sku').value.trim() || undefined,
-        unit: overlay.querySelector('#unit').value.trim() || 'قطعة',
+        unit: overlay.querySelector('#unit').value.trim() || undefined,
         timbre: parseFloat(overlay.querySelector('#timbre').value) || 0,
         tax: parseFloat(overlay.querySelector('#tax').value) || 0,
         category: overlay.querySelector('#category').value || null,

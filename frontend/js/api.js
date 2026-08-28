@@ -137,5 +137,21 @@
   apiFetch.patch  = (url, b, o) => apiFetch(url, Object.assign({ method: 'PATCH',  body: b }, o || {}));
   apiFetch.delete = (url, o)    => apiFetch(url, Object.assign({ method: 'DELETE' }, o || {}));
 
+  /**
+   * Resolve a backend asset path (e.g. "/uploads/1698-123.jpg") to an
+   * absolute URL. The backend stores RELATIVE paths, so when the frontend
+   * is served from a different origin (Vercel) a bare <img src="/uploads/…">
+   * resolves to the FRONTEND origin and shows a broken-image icon.
+   * Prefixing with API_BASE fixes product images everywhere.
+   */
+  function resolveAssetUrl(path) {
+    if (!path || typeof path !== 'string') return '';
+    if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:')) return path;
+    if (path.startsWith('/uploads/')) return API_BASE + path;
+    return path;
+  }
+
+  apiFetch.resolveAssetUrl = resolveAssetUrl;
   global.apiFetch = apiFetch;
+  global.resolveAssetUrl = resolveAssetUrl;
 })(window);

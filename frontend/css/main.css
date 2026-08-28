@@ -54,7 +54,28 @@ ul, ol { list-style: none; }
   display: grid;
   grid-template-columns: 1.1fr 1fr;
   background: var(--bg-body);
-  overflow: hidden;
+  /* FIX: was `overflow: hidden` — on short desktop viewports the brand
+     panel content was clipped and the page could NOT scroll, forcing
+     users to zoom out to see the hidden footer/features. Scrolling is
+     now allowed and the brand panel compacts itself on short screens
+     (see the max-height media queries below). */
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+/* ---- Register page shell (uses .login-main instead of .form-panel) ----
+   register.html had NO styling for its wrapper, so the card hugged the
+   top-left corner on desktop. Center it and give it breathing room. */
+.login-main {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1.5rem;
+  background: var(--bg-body);
+}
+.login-main .login-card {
+  max-width: 460px;
 }
 
 /* ---- Brand panel (left) ---- */
@@ -474,6 +495,44 @@ ul, ol { list-style: none; }
   .demo-hint { padding: 0.65rem 0.75rem; }
 }
 
+/* ---- Short desktop screens (laptops, e.g. 1366×768 / 1280×720) ----
+   The brand panel (hero title + 4 feature cards + footer) is taller
+   than the viewport on these machines, which forced users to zoom out
+   to see everything. Compact it progressively instead. */
+@media (min-width: 992px) and (max-height: 900px) {
+  .brand-panel { padding: 2rem 2.5rem; }
+  .brand-hero h1 { font-size: 2rem; }
+  .brand-hero p { font-size: 0.95rem; }
+  .brand-features { gap: 0.7rem; margin-top: 1.5rem; }
+  .brand-feature { padding: 0.65rem 0.8rem; }
+  .brand-feature p { font-size: 0.8rem; }
+}
+@media (min-width: 992px) and (max-height: 780px) {
+  .brand-panel { padding: 1.5rem 2rem; }
+  .brand-logo { font-size: 1.05rem; }
+  .brand-logo .brand-mark { width: 36px; height: 36px; }
+  .brand-hero { margin-top: 1rem; }
+  .brand-hero h1 { font-size: 1.6rem; margin-bottom: 0.5rem; }
+  .brand-hero p { font-size: 0.88rem; }
+  .brand-features { grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-top: 1.25rem; }
+  .brand-feature h4 { font-size: 0.85rem; }
+  .brand-feature p { display: none; }
+  .login-card { padding: 1.75rem 1.5rem; }
+  .login-card-header { margin-bottom: 1.1rem; }
+  .login-form { gap: 0.8rem; }
+  .login-meta { margin-top: 0.9rem; padding-top: 0.9rem; }
+}
+@media (min-width: 992px) and (max-height: 640px) {
+  .brand-features { display: none; }
+  .login-card { padding: 1.25rem 1.25rem; }
+}
+
 /* RTL tweaks for inputs (icon should be on the right in RTL) */
 [dir="rtl"] .input-wrap .input-icon { inset-inline-start: 0.85rem; }
 [dir="rtl"] .input-wrap .input-pw-toggle { inset-inline-end: 0.5rem; }
+
+/* Register page on short screens: the 5-section form must scroll
+   instead of overflowing. */
+@media (max-width: 991px) {
+  .login-main { padding: 1.5rem 1rem; min-height: 100vh; }
+}

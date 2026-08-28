@@ -31,11 +31,56 @@ let state = {
   status: '',     // '' | 'completed' | 'pending' | 'cancelled' | 'returned'
   from: '',       // ISO date
   to: '',
+  quick: '',      // '' | 'today' | 'yesterday' | 'lastMonth' | 'last3Months' | 'last6Months' | 'lastYear'
   pagination: null,
   items: [],
   stats: { total: 0, revenue: 0, paid: 0, pending: 0, today: 0 },
   settings: null
 };
+
+/* ---------- Quick period filters ----------
+ * Resolve the selected quick period into concrete from/to ISO dates.
+ * Mutually exclusive with the manual from/to pickers: choosing a quick
+ * period overwrites them, and editing a picker clears the quick filter. */
+function applyQuickFilter() {
+  if (!state.quick) return;
+  const now = new Date();
+  const iso = (d) => {
+    const p = (n) => String(n).padStart(2, '0');
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+  };
+  const startOfDay = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+  let from = null, to = null;
+  switch (state.quick) {
+    case 'today':
+      from = startOfDay(now); to = now;
+      break;
+    case 'yesterday': {
+      const y = new Date(now); y.setDate(y.getDate() - 1);
+      from = startOfDay(y);
+      to = new Date(y); to.setHours(23, 59, 59, 999);
+      break;
+    }
+    case 'lastMonth':
+      from = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+      to = now;
+      break;
+    case 'last3Months':
+      from = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
+      to = now;
+      break;
+    case 'last6Months':
+      from = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
+      to = now;
+      break;
+    case 'lastYear':
+      from = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+      to = now;
+      break;
+  }
+  state.from = from ? iso(from) : '';
+  state.to = to ? iso(to) : '';
+}
 
 /* ---------- Helpers ---------- */
 function escapeHtml(s) {
@@ -303,6 +348,15 @@ function renderToolbar() {
           <option value="cancelled" ${state.status === 'cancelled' ? 'selected' : ''}>${t('cancelled', 'Cancelled')}</option>
           <option value="returned" ${state.status === 'returned' ? 'selected' : ''}>${t('returned', 'Returned')}</option>
         </select>
+        <select class="select" id="invoiceQuickFilter" style="width:auto;">
+          <option value="">${t('filterPeriod', 'Period')}: ${t('filterAllTime', 'All time')}</option>
+          <option value="today" ${state.quick === 'today' ? 'selected' : ''}>${t('filterToday', 'Today')}</option>
+          <option value="yesterday" ${state.quick === 'yesterday' ? 'selected' : ''}>${t('filterYesterday', 'Yesterday')}</option>
+          <option value="lastMonth" ${state.quick === 'lastMonth' ? 'selected' : ''}>${t('filterLastMonth', 'Last month')}</option>
+          <option value="last3Months" ${state.quick === 'last3Months' ? 'selected' : ''}>${t('filterLast3Months', 'Last 3 months')}</option>
+          <option value="last6Months" ${state.quick === 'last6Months' ? 'selected' : ''}>${t('filterLast6Months', 'Last 6 months')}</option>
+          <option value="lastYear" ${state.quick === 'lastYear' ? 'selected' : ''}>${t('filterLastYear', 'Last year')}</option>
+        </select>
         <div class="input-group" style="width:auto;">
           <input class="input" id="invoiceFrom" type="date" value="${escapeHtml(state.from)}" title="${t('dateFrom', 'From')}" aria-label="${t('dateFrom', 'From')}" />
         </div>
@@ -389,6 +443,7 @@ function renderTable() {
     const total = fmtCurrency(s.total);
     const pay = paymentBadge(s.paymentMethod);
     const st = statusBadge(s.status);
+    const canDelete = s.status !== 'returned' && s.status !== 'cancelled';
     return `
       <tr>
         <td class="cell-muted">${idx}</td>
@@ -408,6 +463,10 @@ function renderTable() {
             </button>
             <button class="table-action-btn download" data-id="${s._id}" aria-label="${t('downloadPdf', 'Download PDF')}" title="${t('downloadPdf', 'Download PDF')}">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </button>
+            <button class="table-action-btn delete" data-id="${s._id}" ${canDelete ? '' : 'disabled title="' + t('saleCannotCancel', 'Cannot delete a returned sale') + '"'}
+                    aria-label="${t('deleteInvoice', 'Delete invoice')}" title="${canDelete ? t('deleteInvoice', 'Delete invoice') : t('saleCannotCancel', 'Cannot delete a returned sale')}">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
             </button>
           </div>
         </td>
@@ -555,13 +614,30 @@ function bindToolbar() {
   if (st) st.addEventListener('change', () => {
     state.status = st.value; state.page = 1; refreshTable();
   });
+  const quick = document.getElementById('invoiceQuickFilter');
+  if (quick) quick.addEventListener('change', () => {
+    state.quick = quick.value;
+    applyQuickFilter();
+    // Reflect the resolved dates in the manual pickers
+    const fromEl = document.getElementById('invoiceFrom');
+    const toEl = document.getElementById('invoiceTo');
+    if (fromEl) fromEl.value = state.from || '';
+    if (toEl) toEl.value = state.to || '';
+    state.page = 1; refreshTable();
+  });
   const fromEl = document.getElementById('invoiceFrom');
   if (fromEl) fromEl.addEventListener('change', () => {
-    state.from = fromEl.value; state.page = 1; refreshTable();
+    state.from = fromEl.value; state.quick = '';
+    const q = document.getElementById('invoiceQuickFilter');
+    if (q) q.value = '';
+    state.page = 1; refreshTable();
   });
   const toEl = document.getElementById('invoiceTo');
   if (toEl) toEl.addEventListener('change', () => {
-    state.to = toEl.value; state.page = 1; refreshTable();
+    state.to = toEl.value; state.quick = '';
+    const q = document.getElementById('invoiceQuickFilter');
+    if (q) q.value = '';
+    state.page = 1; refreshTable();
   });
   const refresh = document.getElementById('invoiceRefreshBtn');
   if (refresh) refresh.addEventListener('click', () => refreshTable());
@@ -615,6 +691,11 @@ function bindTable() {
         downloadInvoicePdf(sale);
       }
     });
+  });
+  // Row-level delete (same action as the modal's delete button — no need
+  // to open the detail modal first).
+  container.querySelectorAll('.table-action-btn.delete:not([disabled])').forEach(b => {
+    b.addEventListener('click', () => deleteInvoice(b.dataset.id));
   });
   container.querySelectorAll('.page-btn').forEach(b => {
     b.addEventListener('click', () => {
@@ -684,6 +765,29 @@ function exportCsv() {
   if (window.Toast) window.Toast.success(t('exportDone', 'Export ready'));
 }
 
+/* ---------- Delete invoice (row action / modal action) ---------- */
+async function deleteInvoice(id) {
+  const ok = await (window.Toast && window.Toast.confirm
+    ? window.Toast.confirm(t('deleteInvoiceConfirm', 'Delete this invoice? Stock will be restored to its previous level.'))
+    : Promise.resolve(window.confirm(t('deleteInvoiceConfirm', 'Delete this invoice?'))));
+  if (!ok) return;
+  try {
+    const r = await apiFetch.delete('/api/sales/' + id);
+    if (r && r.success) {
+      if (window.Toast) window.Toast.success(t('invoiceDeleted', 'Invoice deleted'));
+      document.querySelectorAll('#invoiceDetailModal').forEach(m => m.remove());
+      await fetchInvoices();
+      render();
+      // Broadcast deletion so other pages (dashboard, reports) refresh too.
+      try { window.dispatchEvent(new CustomEvent('sale:completed', { detail: { saleId: id, deleted: true } })); } catch (_) {}
+    } else {
+      throw new Error((r && r.message) || 'Failed');
+    }
+  } catch (e) {
+    if (window.Toast) window.Toast.error((e && e.message) || t('error', 'Error'));
+  }
+}
+
 /* ---------- Invoice detail modal ---------- */
 async function viewInvoiceModal(sale) {
   // Always fetch full detail (the invoices table only has stub items).
@@ -737,7 +841,6 @@ const headerText = settings.invoiceHeader && settings.invoiceHeader.trim() ? `
   const tax      = Number(sale.tax) || 0;
   const timbre   = Number(sale.timbre) || 0;
   const total    = Number(sale.total) || 0;
-  const totalWords = num2frenchwords(total);
   const payMethod  = sale.paymentMethod || 'cash';
   const payLabel    = paymentLabel(payMethod);
   const invoiceNo   = sale.saleNumber || ('#' + String(sale._id || '').slice(-6));
@@ -754,6 +857,21 @@ const headerText = settings.invoiceHeader && settings.invoiceHeader.trim() ? `
         <td class="num">${it.price.toFixed(2)}</td>
         <td class="num">${it.total.toFixed(2)}</td>
       </tr>`).join('');
+
+  /* Printed-language labels (FR/EN) — same policy as the POS receipt:
+     Arabic is never used on printed invoices because jsPDF core fonts
+     cannot render Arabic. The choice made in the pre-sale popup (or the
+     default FR) applies here too. Page language stays untouched. */
+  const invLang = window.getStoredInvoiceLang ? window.getStoredInvoiceLang() : 'fr';
+  const IL = window.invoiceLabels ? window.invoiceLabels(invLang) : {
+    invoice: 'FACTURE', invoiceNumber: 'N° Facture', date: 'Date', customer: 'Client',
+    payment: 'Paiement', product: 'Produit', unit: 'Unité', qty: 'Qté',
+    unitPriceHT: 'P.Unitaire H.T', amountHT: 'Montant H.T', totalHT: 'Total H.T',
+    itemDiscounts: 'Remises articles', cartDiscount: 'Remise', coupon: 'Coupon',
+    vat: 'TVA', stamp: 'Timbre', totalTTC: 'TOTAL T.T.C',
+    wordsIntro: 'Arrêté la présente facture à la somme de :', thanks: 'Merci de votre confiance'
+  };
+  const totalWords = invLang === 'en' ? '' : num2frenchwords(total);
 
   const html = `
     <style>
@@ -833,40 +951,40 @@ const headerText = settings.invoiceHeader && settings.invoiceHeader.trim() ? `
 </div>
 <hr style="border:none;border-top:2px solid ${pc};margin:0.6rem 0;" />
               <div class="receipt-meta">
-                <div><strong>FACTURE</strong></div>
-                <div><strong>${t('invoiceNumber', 'Invoice number')}:</strong> ${escapeHtml(invoiceNo)}</div>
-                <div><strong>${t('date', 'Date')}:</strong> ${escapeHtml(saleDate)}</div>
+                <div><strong>${escapeHtml(IL.invoice)}</strong></div>
+                <div><strong>${escapeHtml(IL.invoiceNumber)}:</strong> ${escapeHtml(invoiceNo)}</div>
+                <div><strong>${escapeHtml(IL.date)}:</strong> ${escapeHtml(saleDate)}</div>
               </div>
               <div class="receipt-meta">
-                <div><strong>${t('customer', 'Customer')}:</strong> ${escapeHtml(customerNameStr)}</div>
-                <div><strong>${t('paymentMethod', 'Payment')}:</strong> ${escapeHtml(payLabel)}</div>
+                <div><strong>${escapeHtml(IL.customer)}:</strong> ${escapeHtml(customerNameStr)}</div>
+                <div><strong>${escapeHtml(IL.payment)}:</strong> ${escapeHtml(payLabel)}</div>
               </div>
               <table>
                 <thead>
                   <tr>
                     <th>#</th>
-                    <th>${t('product', 'Product')}</th>
-                    <th>${t('unit', 'Unité')}</th>
-                    <th class="num">${t('quantity', 'Qté')}</th>
-                    <th class="num">P Unitaire H.T</th>
-                    <th class="num">Montant H.T</th>
+                    <th>${escapeHtml(IL.product)}</th>
+                    <th>${escapeHtml(IL.unit)}</th>
+                    <th class="num">${escapeHtml(IL.qty)}</th>
+                    <th class="num">${escapeHtml(IL.unitPriceHT)}</th>
+                    <th class="num">${escapeHtml(IL.amountHT)}</th>
                   </tr>
                 </thead>
                 <tbody>${itemsRows || `<tr><td colspan="6" style="text-align:center;">${t('noData', 'No data')}</td></tr>`}</tbody>
               </table>
               <div class="receipt-totals">
-                <div class="receipt-totals-row"><span>Total H.T</span><span>${subtotal.toFixed(2)} ${currency}</span></div>
-                ${itemDiscounts > 0 ? `<div class="receipt-totals-row"><span>${t('perItemDiscount', 'Item discounts')}</span><span>−${itemDiscounts.toFixed(2)} ${currency}</span></div>` : ''}
-                ${cartDiscount > 0 ? `<div class="receipt-totals-row"><span>${t('discount', 'Cart discount')}</span><span>−${cartDiscount.toFixed(2)} ${currency}</span></div>` : ''}
-                ${couponDiscount > 0 ? `<div class="receipt-totals-row"><span>${t('couponDiscount', 'Coupon')}</span><span>−${couponDiscount.toFixed(2)} ${currency}</span></div>` : ''}
-                ${tax > 0 ? `<div class="receipt-totals-row"><span>TVA (${taxRate} %)</span><span>${tax.toFixed(2)} ${currency}</span></div>` : ''}
-                ${timbre > 0 ? `<div class="receipt-totals-row"><span>${t('timbre', 'Timbre')}</span><span>${timbre.toFixed(2)} ${currency}</span></div>` : ''}
-                <div class="receipt-totals-row total"><span>TOTAL T.T.C</span><span>${total.toFixed(2)} ${currency}</span></div>
-                ${totalWords ? `<div class="receipt-words">Arrêté la présente facture à la somme de : ${escapeHtml(totalWords)}.</div>` : ''}
+                <div class="receipt-totals-row"><span>${escapeHtml(IL.totalHT)}</span><span>${subtotal.toFixed(2)} ${currency}</span></div>
+                ${itemDiscounts > 0 ? `<div class="receipt-totals-row"><span>${escapeHtml(IL.itemDiscounts)}</span><span>−${itemDiscounts.toFixed(2)} ${currency}</span></div>` : ''}
+                ${cartDiscount > 0 ? `<div class="receipt-totals-row"><span>${escapeHtml(IL.cartDiscount)}</span><span>−${cartDiscount.toFixed(2)} ${currency}</span></div>` : ''}
+                ${couponDiscount > 0 ? `<div class="receipt-totals-row"><span>${escapeHtml(IL.coupon)}</span><span>−${couponDiscount.toFixed(2)} ${currency}</span></div>` : ''}
+                ${tax > 0 ? `<div class="receipt-totals-row"><span>${escapeHtml(IL.vat)} (${taxRate} %)</span><span>${tax.toFixed(2)} ${currency}</span></div>` : ''}
+                ${timbre > 0 ? `<div class="receipt-totals-row"><span>${escapeHtml(IL.stamp)}</span><span>${timbre.toFixed(2)} ${currency}</span></div>` : ''}
+                <div class="receipt-totals-row total"><span>${escapeHtml(IL.totalTTC)}</span><span>${total.toFixed(2)} ${currency}</span></div>
+                ${totalWords ? `<div class="receipt-words">${escapeHtml(IL.wordsIntro)} ${escapeHtml(totalWords)}.</div>` : ''}
                 ${customText ? `<div class="receipt-custom-text" style="margin-top:0.5rem;font-size:0.78rem;color:#111;white-space:pre-wrap;">${escapeHtml(customText)}</div>` : ''}
               </div>
               <div class="receipt-foot">
-                ${escapeHtml(settings.invoiceFooter || t('thanks', 'Thank you for your trust'))}
+                ${escapeHtml(settings.invoiceFooter || IL.thanks)}
               </div>
             </div>
           </div>
@@ -904,27 +1022,7 @@ const headerText = settings.invoiceHeader && settings.invoiceHeader.trim() ? `
   // Delete invoice (actually cancels — backend restores stock + audit-trails it).
   const delBtn = overlay.querySelector('#invoiceDeleteBtn');
   if (delBtn && sale.status !== 'returned' && sale.status !== 'cancelled') {
-    delBtn.addEventListener('click', async () => {
-      const ok = await (window.Toast && window.Toast.confirm
-        ? window.Toast.confirm(t('deleteInvoiceConfirm', 'Delete this invoice? Stock will be restored to its previous level.'))
-        : Promise.resolve(window.confirm(t('deleteInvoiceConfirm', 'Delete this invoice?'))));
-      if (!ok) return;
-      try {
-        const r = await apiFetch.delete('/api/sales/' + sale._id);
-        if (r && r.success) {
-          if (window.Toast) window.Toast.success(t('invoiceDeleted', 'Invoice deleted'));
-          close();
-          await fetchInvoices();
-          render();
-          // Broadcast sale completion so other pages refresh too.
-          try { window.dispatchEvent(new CustomEvent('sale:completed', { detail: { saleId: sale._id, deleted: true } })); } catch (_) {}
-        } else {
-          throw new Error((r && r.message) || 'Failed');
-        }
-      } catch (e) {
-        if (window.Toast) window.Toast.error((e && e.message) || t('error', 'Error'));
-      }
-    });
+    delBtn.addEventListener('click', () => deleteInvoice(sale._id));
   }
 
   const escHandler = (e) => {
@@ -1234,6 +1332,13 @@ function printInvoice(sale) {
       }
     }, 100);
   }
+}
+
+/* Expose the A4 invoice PDF generator for reuse by the Tickets page
+   (window.__dzposDownloadInvoicePdf). Kept internal-name-safe so the
+   tickets module never has to duplicate the jsPDF code. */
+if (typeof window !== 'undefined') {
+  window.__dzposDownloadInvoicePdf = function (sale) { return downloadInvoicePdf(sale); };
 }
 
 /* ---------- Entry ---------- */

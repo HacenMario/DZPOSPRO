@@ -189,11 +189,10 @@ try {
     }
 } catch (err) {
     showError('Cannot reach server');
+} finally {
+    btn.classList.remove('is-loading');
+    btn.disabled = false;
 }
-            } finally {
-                    btn.classList.remove('is-loading');
-                    btn.disabled = false;
-                }
             });
         }
     })();
