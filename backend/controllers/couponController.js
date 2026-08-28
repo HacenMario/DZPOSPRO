@@ -64,7 +64,7 @@ const createCoupon = async (req, res, next) => {
             maxDiscount: Number(maxDiscount) || 0,
             validFrom: new Date(validFrom),
             validUntil: new Date(validUntil),
-            usageLimit: Number(usageLimit) || 1,
+            usageLimit: Number(usageLimit) || 0,
             isActive: isActive !== undefined ? isActive : true,
             description: {
                 ar: description?.ar || '',
@@ -100,7 +100,7 @@ const updateCoupon = async (req, res, next) => {
         if (maxDiscount !== undefined) c.maxDiscount = Number(maxDiscount);
         if (validFrom !== undefined) c.validFrom = new Date(validFrom);
         if (validUntil !== undefined) c.validUntil = new Date(validUntil);
-        if (usageLimit !== undefined) c.usageLimit = Number(usageLimit);
+        if (usageLimit !== undefined) c.usageLimit = Number(usageLimit) || 0;
         if (isActive !== undefined) c.isActive = isActive;
         if (description) {
             if (description.ar !== undefined) c.description.ar = description.ar;
@@ -146,7 +146,7 @@ const validateCoupon = async (req, res, next) => {
         if (now < coupon.validFrom || now > coupon.validUntil) {
             return errorResponse(res, 400, getTranslation('couponExpired', lang));
         }
-        if (coupon.usedCount >= coupon.usageLimit) {
+        if (coupon.usageLimit > 0 && coupon.usedCount >= coupon.usageLimit) {
             return errorResponse(res, 400, getTranslation('couponUsedUp', lang));
         }
         if (Number(cartTotal) < coupon.minOrder) {

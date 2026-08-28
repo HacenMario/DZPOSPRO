@@ -78,7 +78,7 @@ const applyCouponInternal = async (code, cartTotal) => {
 
     const now = new Date();
     if (now < coupon.validFrom || now > coupon.validUntil) return { coupon, discount: 0, error: 'couponExpired' };
-    if (coupon.usedCount >= coupon.usageLimit) return { coupon, discount: 0, error: 'couponUsedUp' };
+    if (coupon.usageLimit > 0 && coupon.usedCount >= coupon.usageLimit) return { coupon, discount: 0, error: 'couponUsedUp' };
     if (cartTotal < coupon.minOrder) return { coupon, discount: 0, error: 'couponMinOrder' };
 
     let discount = 0;
@@ -224,8 +224,11 @@ const createSale = async (req, res, next) => {
                 couponDoc = r.coupon;
                 couponDiscount = r.discount;
                 if (couponDoc) {
+                    // usageLimit = 0 يعني غير محدود: نزيد العداد دائماً؛ وإلا نزيده فقط إذا لم يبلغ الحد
+                    const couponFilter = { _id: couponDoc._id };
+                    if (couponDoc.usageLimit > 0) couponFilter.usedCount = { $lt: couponDoc.usageLimit };
                     await Coupon.updateOne(
-                        { _id: couponDoc._id, usedCount: { $lt: couponDoc.usageLimit } },
+                        couponFilter,
                         { $inc: { usedCount: 1 } },
                         { session: txnSession }
                     );
