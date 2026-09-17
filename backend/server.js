@@ -29,7 +29,7 @@ const PORT = parseInt(process.env.PORT, 10) || 3001;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
 // CORS allow-list (never '*' with credentials)
-const corsOrigins = (process.env.CORS_ORIGINS || 'dzpospro-production.up.railway.app,https://dzpospro.vercel.app,https://dzpospro.vercel.app')
+const corsOrigins = (process.env.CORS_ORIGINS || 'https://dzpospro-production.up.railway.app,https://dzpospro.vercel.app,https://dzpospro.vercel.app')
     .split(',')
     .map(s => s.trim())
     .filter(Boolean);
