@@ -1,7 +1,9 @@
 // backend/models/Product.js
 const mongoose = require('mongoose');
+const { tenantPlugin } = require('../utils/tenantPlugin');
 
 const productSchema = new mongoose.Schema({
+    storeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Store', index: true, default: null },
     name: {
         ar: { type: String, required: true, trim: true },
         en: { type: String, default: '', trim: true },
@@ -13,8 +15,8 @@ const productSchema = new mongoose.Schema({
         fr: { type: String, default: '' }
     },
     category: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', default: null },
-    barcode: { type: String, unique: true, sparse: true, trim: true },
-    sku: { type: String, unique: true, sparse: true, trim: true },
+    barcode: { type: String, trim: true },
+    sku: { type: String, trim: true },
 
     price: { type: Number, required: true, min: 0 },
     costPrice: { type: Number, default: 0, min: 0 },
@@ -34,8 +36,6 @@ const productSchema = new mongoose.Schema({
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: true });
 
-productSchema.index({ barcode: 1 });
-productSchema.index({ sku: 1 });
 productSchema.index({ 'name.ar': 'text', 'name.en': 'text', 'name.fr': 'text' });
 productSchema.index({ price: 1 });
 productSchema.index({ stock: 1 });
@@ -48,5 +48,11 @@ productSchema.methods.getName = function (lang = 'ar') {
 productSchema.methods.getDescription = function (lang = 'ar') {
     return this.description?.[lang] || this.description?.ar || '';
 };
+
+productSchema.index({ storeId: 1, barcode: 1 });
+
+productSchema.index({ storeId: 1, sku: 1 });
+
+productSchema.plugin(tenantPlugin);
 
 module.exports = mongoose.model('Product', productSchema);

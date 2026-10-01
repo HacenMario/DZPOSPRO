@@ -167,12 +167,13 @@ const getInventorySummary = async (req, res, next) => {
     try {
         const lang = req.lang || 'ar';
         const lowStockProducts = await Product.find({
+            ...require('../utils/tenantPlugin').tenantScope(),
             status: 'active',
             $expr: { $lte: ['$stock', { $ifNull: ['$minStock', 5] }] }
         }).populate('category', 'name');
 
         const agg = await Product.aggregate([
-            { $match: { status: 'active' } },
+            { $match: { ...require('../utils/tenantPlugin').tenantScope(), status: 'active' } },
             { $group: {
                 _id: null,
                 totalStockValue: { $sum: { $multiply: ['$stock', '$costPrice'] } },

@@ -1,8 +1,10 @@
 // backend/models/Sale.js
 const mongoose = require('mongoose');
+const { tenantPlugin } = require('../utils/tenantPlugin');
 
 const saleSchema = new mongoose.Schema({
-    saleNumber: { type: String, required: true, unique: true },
+    storeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Store', index: true, default: null },
+    saleNumber: { type: String, required: true },
     saleDate: { type: Date, default: Date.now },
     customer: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', default: null },
     session: { type: mongoose.Schema.Types.ObjectId, ref: 'Session', required: true },
@@ -45,5 +47,9 @@ saleSchema.index({ session: 1, status: 1 });
 saleSchema.index({ saleDate: -1 });
 saleSchema.index({ customer: 1 });
 saleSchema.index({ status: 1 });
+
+saleSchema.index({ storeId: 1, saleNumber: 1 });
+
+saleSchema.plugin(tenantPlugin);
 
 module.exports = mongoose.model('Sale', saleSchema);

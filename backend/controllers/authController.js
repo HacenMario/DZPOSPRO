@@ -11,7 +11,7 @@ const signToken = (user) => jwt.sign(
     { expiresIn: process.env.JWT_EXPIRE || '7d' }
 );
 
-const publicUser = (user) => ({
+const publicUser = (user, store = null) => ({
     id: user._id,
     name: user.name,
     email: user.email,
@@ -19,7 +19,9 @@ const publicUser = (user) => ({
     role: user.role,
     isActive: user.isActive,
     settings: user.settings,
-    lastLogin: user.lastLogin
+    lastLogin: user.lastLogin,
+    storeId: user.storeId || null,
+    store: store || null
 });
 
 // POST /api/auth/login
@@ -39,8 +41,23 @@ const login = async (req, res, next) => {
         user.lastLogin = new Date();
         await user.save();
 
+        // Load tenant store (SaaS) and verify it is active
+        let store = null;
+        if (user.storeId && user.role !== 'superadmin') {
+            try {
+                const Store = require('../models/Store');
+                const storeDoc = await Store.findById(user.storeId).lean();
+                if (storeDoc) {
+                    if (storeDoc.status === 'suspended') {
+                        return errorResponse(res, 403, getTranslation('storeSuspended', lang));
+                    }
+                    store = { id: storeDoc._id, name: storeDoc.name, plan: storeDoc.plan, status: storeDoc.status };
+                }
+            } catch (e) { logger.warn('Store lookup on login failed:', e.message); }
+        }
+
         const token = signToken(user);
-        return successResponse(res, { token, user: publicUser(user) }, getTranslation('loginSuccess', lang));
+        return successResponse(res, { token, user: publicUser(user, store) }, getTranslation('loginSuccess', lang));
     } catch (err) {
         logger.error('Login error:', err.message);
         next(err);
@@ -162,6 +179,61 @@ const logout = async (req, res, next) => {
     }
 };
 
+// POST /api/auth/register-store — public self-signup (SaaS onboarding).
+// Creates a Store (14-day trial) + its first admin user atomically.
+const registerStore = async (req, res, next) => {
+    try {
+        const { storeName, ownerName, name, email, password, phone, address, lang: langBody } = req.body;
+        const lang = langBody || req.lang || 'ar';
+
+        if (!storeName || !name || !email || !password) {
+            return errorResponse(res, 400, getTranslation('missingFields', lang));
+        }
+
+        const existing = await User.findOne({ email: { $regex: new RegExp('^' + (email || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i') } });
+        if (existing) return errorResponse(res, 400, getTranslation('emailExists', lang));
+
+        const Store = require('../models/Store');
+        const store = new Store({
+            name: String(storeName).trim().slice(0, 120),
+            ownerName: ownerName || name,
+            email: (email || '').trim(),
+            phone: phone || '',
+            address: address || '',
+            plan: 'trial',
+            status: 'active',
+            trialEndsAt: new Date(Date.now() + 14 * 24 * 3600 * 1000)
+        });
+        await store.save();
+
+        const user = new User({
+            name,
+            email: (email || '').trim(),
+            password,
+            phone: phone || '',
+            role: 'admin',
+            storeId: store._id
+        });
+        await user.save();
+
+        // Give the store its own settings document
+        try {
+            const Setting = require('../models/Setting');
+            await Setting.create({ storeId: store._id, storeName: store.name });
+        } catch (e) { logger.warn('Store settings bootstrap failed:', e.message); }
+
+        const token = signToken(user);
+        return createdResponse(res, {
+            token,
+            user: publicUser(user, store.toPublicInfo()),
+            store: store.toPublicInfo()
+        }, getTranslation('storeCreated', lang));
+    } catch (err) {
+        logger.error('registerStore error:', err.message);
+        next(err);
+    }
+};
+
 module.exports = {
     login,
     register,
@@ -169,5 +241,6 @@ module.exports = {
     updateProfile,
     changePassword,
     refresh,
-    logout
+    logout,
+    registerStore
 };

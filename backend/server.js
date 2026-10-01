@@ -23,13 +23,18 @@ const languageMiddleware = require('./middleware/language');
 const { generalLimiter } = require('./middleware/rateLimiter');
 const { errorHandler, notFound, asyncHandler } = require('./middleware/errorHandler');
 
+// v3 — SaaS + audit
+const tenantMiddleware = require('./middleware/tenant');
+const auditMiddleware = require('./middleware/audit');
+const { runWithTenant } = require('./services/tenantContext');
+
 const app = express();
 app.set('trust proxy', 1);
 const PORT = parseInt(process.env.PORT, 10) || 3001;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
 // CORS allow-list (never '*' with credentials)
-const corsOrigins = (process.env.CORS_ORIGINS || 'dzpospro-production.up.railway.app,https://dzpospro.vercel.app,https://dzpospro.vercel.app')
+const corsOrigins = (process.env.CORS_ORIGINS || 'https://dzpospro-production.up.railway.app,https://dzpospro.vercel.app,https://dzpospro.vercel.app')
     .split(',')
     .map(s => s.trim())
     .filter(Boolean);
@@ -83,6 +88,9 @@ if (morgan) app.use(morgan(NODE_ENV === 'development' ? 'dev' : 'combined'));
 
 // Language detection — must run BEFORE route handlers so req.lang is always set.
 app.use(languageMiddleware);
+
+// v3 — audit trail for mutating API calls (mounted on /api below, after auth)
+app.use(auditMiddleware);
 
 // Global rate limiter on /api
 app.use('/api', generalLimiter);
@@ -164,6 +172,15 @@ app.use('/api/inventory', require('./routes/inventory'));
 app.use('/api/sessions', require('./routes/sessions'));
 app.use('/api/purchase-orders', require('./routes/purchaseOrders'));
 
+// ===== v3 — SaaS / AI / notifications / backups / audit =====
+app.use('/api/stores', require('./routes/stores'));
+app.use('/api/notifications', require('./routes/notifications'));
+app.use('/api/push', require('./routes/push'));
+app.use('/api/backups', require('./routes/backups'));
+app.use('/api/audit', require('./routes/audit'));
+app.use('/api/ai', require('./routes/ai'));
+app.use('/api/alerts', require('./routes/alertConfigs'));
+
 // ----- 404 (JSON for API) -----
 app.use('/api', notFound);
 
@@ -194,10 +211,20 @@ const io = socketIo(server, {
 io.on('connection', (socket) => {
     logger.info(`Socket.io client connected: ${socket.id}`);
 
-    socket.on('join', (userId) => {
-        if (userId) {
-            socket.join(`user_${userId}`);
-            logger.debug(`User ${userId} joined their room`);
+    // v3 — join with { userId, storeId } (back-compat: plain userId string)
+    socket.on('join', (payload) => {
+        try {
+            const data = typeof payload === 'object' && payload !== null ? payload : { userId: payload };
+            if (data.userId) {
+                socket.join(`user_${data.userId}`);
+                logger.debug(`User ${data.userId} joined their room`);
+            }
+            if (data.storeId) {
+                socket.join(`store_${data.storeId}`);
+                logger.debug(`Socket joined store room store_${data.storeId}`);
+            }
+        } catch (e) {
+            logger.warn('socket join error:', e.message);
         }
     });
 
@@ -206,11 +233,19 @@ io.on('connection', (socket) => {
     });
 });
 
+global.__io = io;
+
 global.sendNotification = (userId, notification) => {
     io.to(`user_${userId}`).emit('notification', notification);
 };
 global.broadcastNotification = (notification) => {
     io.emit('notification', notification);
+};
+
+// v3 — store-scoped notification broadcast (socket part of notifyStore)
+global.sendStoreNotification = (storeId, notification) => {
+    if (storeId) io.to(`store_${storeId}`).emit('notification', notification);
+    else io.emit('notification', notification);
 };
 
 // ----- boot -----
@@ -219,6 +254,57 @@ global.broadcastNotification = (notification) => {
         await connectDB();
     } catch (e) {
         logger.warn(`DB unavailable at boot — continuing without it: ${e.message}`);
+    }
+
+    // ===== v3 — scheduled jobs (crons) =====
+    try {
+        if (getConnectionState()) {
+            const cron = require('node-cron');
+            const backupService = require('./services/backupService');
+            const { notifyStore } = require('./services/notifyService');
+            const aiService = require('./services/aiService');
+            const alertEngine = require('./services/alertEngine');
+            const Store = require('./models/Store');
+
+            // Weekly backup — default Sunday 03:00 (BACKUP_CRON env overrides)
+            const backupCron = process.env.BACKUP_CRON || '0 3 * * 0';
+            if (cron.validate(backupCron)) {
+                cron.schedule(backupCron, async () => {
+                    try {
+                        const rec = await runWithTenant({ storeId: null, isSuper: true }, () => backupService.createBackup('auto-weekly'));
+                        await notifyStore({ type: 'backup', push: false, title: '💾 Backup automatique', body: `Weekly backup completed: ${rec.filename}` });
+                    } catch (err) {
+                        logger.error('Weekly backup failed:', err.message);
+                        try { const BackupRecord = require('./models/BackupRecord'); await BackupRecord.create({ filename: '-', status: 'failed', error: err.message, trigger: 'auto-weekly' }); } catch (_) {}
+                    }
+                });
+                logger.info(`Weekly backup scheduled: "${backupCron}"`);
+            } else {
+                logger.warn(`Invalid BACKUP_CRON "${backupCron}" — weekly backup disabled`);
+            }
+
+            // Smart alerts engine (hourly checks + daily summary scheduler)
+            alertEngine.startAlertEngine({
+                onDailySummary: async (store) => {
+                    try {
+                        const lang = store.settingsLang || 'fr';
+                        const result = await runWithTenant({ storeId: store._id, isSuper: false }, () =>
+                            aiService.buildDailySummary({ storeId: store._id, lang })
+                        );
+                        await notifyStore({
+                            storeId: store._id, type: 'ai', push: true,
+                            title: '🌙 ' + (lang === 'ar' ? 'الملخص اليومي الذكي' : lang === 'en' ? 'Smart daily summary' : 'Résumé intelligent du jour'),
+                            body: (result.text || '').slice(0, 400),
+                            link: 'ai'
+                        });
+                    } catch (err) {
+                        logger.warn(`Daily summary failed for store ${store._id}: ${err.message}`);
+                    }
+                }
+            });
+        }
+    } catch (e) {
+        logger.warn(`Cron bootstrap failed: ${e.message}`);
     }
 
     server.listen(PORT, () => {

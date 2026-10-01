@@ -1,11 +1,14 @@
 // backend/models/SaleItem.js
 const mongoose = require('mongoose');
+const { tenantPlugin } = require('../utils/tenantPlugin');
 
 const saleItemSchema = new mongoose.Schema({
+    storeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Store', index: true, default: null },
     sale: { type: mongoose.Schema.Types.ObjectId, ref: 'Sale', default: null },
     product: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
     quantity: { type: Number, required: true, min: 1 },
     price: { type: Number, required: true, min: 0 },   // unit price at sale time
+    costPrice: { type: Number, default: 0, min: 0 },   // unit cost at sale time (profitability)
     discount: { type: Number, default: 0, min: 0 },
     total: { type: Number, required: true, min: 0 },
     timbre: { type: Number, default: 0, min: 0 },
@@ -19,5 +22,7 @@ const saleItemSchema = new mongoose.Schema({
 saleItemSchema.index({ sale: 1 });
 saleItemSchema.index({ product: 1 });
 saleItemSchema.index({ createdAt: -1 });
+
+saleItemSchema.plugin(tenantPlugin);
 
 module.exports = mongoose.model('SaleItem', saleItemSchema);

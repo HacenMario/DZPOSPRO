@@ -189,6 +189,7 @@ const createSale = async (req, res, next) => {
                     product: product._id,
                     quantity: qty,
                     price: unitPrice,
+                    costPrice: product.costPrice || 0,   // v3 — profitability snapshot
                     discount: Number(item.discount) || 0,
                     total: itemTotal,
                     timbre: pTimbre,

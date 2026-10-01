@@ -2960,6 +2960,35 @@ async function completeSale() {
   if (btn) { btn.disabled = true; btn.innerHTML = '<div class="spinner sm" style="display:inline-block;vertical-align:middle;"></div> <span style="margin-inline-start:0.4rem;">' + t('loading', 'Loading...') + '</span>'; }
 
   try {
+    // v3 — OFFLINE MODE: queue the sale locally when the network is down
+    if (!navigator.onLine && window.OfflineDB) {
+      try {
+        await window.OfflineDB.addPendingOp({
+          url: '/api/sales',
+          method: 'POST',
+          body,
+          kind: 'sale',
+          label: (state.selectedCustomerName || '') + ' · ' + tt.total
+        });
+        if (window.Toast) window.Toast.warning(t('saleQueuedOffline', 'لا يوجد اتصال — تم حفظ البيع محلياً وسيُرسل تلقائياً عند عودة الشبكة ✓'));
+        // optimistically clear the cart like an online sale
+        state.cart = [];
+        state.selectedCustomerId = null;
+        state.selectedCustomerName = '';
+        state.couponCode = ''; state.couponDiscount = 0; state.couponObj = null;
+        state.amountPaid = 0; state.splitCash = 0; state.splitCard = 0;
+        state.paymentMethod = 'cash';
+        state.activeCustomerId = null;
+        try { renderCartInner(); renderTotalsInner(); } catch (_) {}
+        if (window.DZPWA) window.DZPWA.updateSyncChip?.();
+        if (btn) { btn.disabled = false; btn.innerHTML = oldHtml; }
+        return;
+      } catch (queueErr) {
+        console.error('[pos] offline queue failed', queueErr);
+        // fall through to the normal path (it will show a network error)
+      }
+    }
+
     const r = await apiFetch.post('/api/sales', body);
     if (r && r.success && r.data && r.data.sale) {
       const sale = r.data.sale;

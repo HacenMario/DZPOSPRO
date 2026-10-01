@@ -1,0 +1,51 @@
+{
+    "name": "DZ POS PRO — نقطة البيع الاحترافية",
+    "short_name": "DZ POS PRO",
+    "description": "نظام نقاط بيع احترافي متعدد المخازن مع ذكاء اصطناعي — POS SaaS multi-magasins avec IA",
+    "id": "/dashboard.html",
+    "start_url": "/dashboard.html",
+    "scope": "/",
+    "display": "standalone",
+    "orientation": "any",
+    "background_color": "#10b981",
+    "theme_color": "#10b981",
+    "lang": "ar",
+    "dir": "auto",
+    "categories": ["business", "productivity", "shopping"],
+    "icons": [
+        {
+            "src": "icons/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "icons/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "icons/icon-maskable-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ],
+    "shortcuts": [
+        {
+            "name": "نقطة البيع / Point de vente",
+            "short_name": "POS",
+            "description": "افتح شاشة البيع مباشرة",
+            "url": "/dashboard.html#sales",
+            "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+        },
+        {
+            "name": "المساعد الذكي / Assistant IA",
+            "short_name": "AI",
+            "description": "اسأل مخزنك",
+            "url": "/dashboard.html#ai",
+            "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+        }
+    ]
+}

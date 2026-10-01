@@ -1031,9 +1031,76 @@ export async function renderReportsPage() {
   await fetchAll();
   render();
 
+  // v3 — Profitability report section (appended, silent on error)
+  loadProfitabilitySection();
+
   // Live refresh: re-run on sale:completed or when the tab becomes visible.
   setupLiveRefresh();
   window._lastReportsRender = Date.now();
+}
+
+/* ---------- v3: Profitability report (real margins per product) ---------- */
+let _profitRows = [];
+async function loadProfitabilitySection() {
+  const content = document.getElementById('pageContent');
+  if (!content) return;
+  const host = document.createElement('div');
+  host.id = 'profitSection';
+  content.appendChild(host);
+  host.innerHTML = `<div class="card mb-4"><div class="loading-state"><div class="spinner"></div></div></div>`;
+  try {
+    const qs = new URLSearchParams({ from: state.from, to: state.to });
+    const res = await apiFetch.get('/api/reports/profitability?' + qs.toString());
+    const d = res.data || res;
+    const rows = d.data || [];
+    _profitRows = rows;
+    const totals = d.totals || {};
+    const t = (k, fb) => (typeof window.t === 'function' ? window.t(k, fb) : fb);
+    host.innerHTML = `
+      <div class="card mb-4">
+        <div class="card-header">
+          <div class="card-title"><span>💰 ${t('profitabilityTitle', 'تقرير الربحية الحقيقية')}</span></div>
+          <div class="export-btns">
+            <button class="btn btn-secondary btn-sm" id="profXlsx">📊 Excel</button>
+            <button class="btn btn-secondary btn-sm" id="profPdf">📄 PDF</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="kpi-grid" style="margin-bottom:12px">
+            <div class="card kpi-card"><div class="kpi-label">${t('revenue', 'Revenue')}</div><div class="kpi-value">${(totals.revenue || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</div></div>
+            <div class="card kpi-card"><div class="kpi-label">${t('totalCost', 'التكلفة')}</div><div class="kpi-value">${(totals.cost || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</div></div>
+            <div class="card kpi-card"><div class="kpi-label">${t('totalProfit', 'الربح')}</div><div class="kpi-value" style="color:${(totals.profit || 0) >= 0 ? '#10b981' : '#ef4444'}">${(totals.profit || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</div></div>
+            <div class="card kpi-card"><div class="kpi-label">${t('marginPct', 'هامش %')}</div><div class="kpi-value">${totals.marginPct != null ? totals.marginPct + '%' : '—'}</div></div>
+          </div>
+          ${totals.unknownCost ? `<p class="muted" style="font-size:12px">ℹ️ ${t('missingCostHint', 'منتجات بدون تكلفة مسجلة — اضبط costPrice لكل منتج لتظهر الربحية الحقيقية.')}</p>` : ''}
+          <div class="table-wrap"><table class="table">
+            <thead><tr><th>${t('product')}</th><th>${t('qtySold', 'الكمية المباعة')}</th><th>${t('revenue', 'الإيراد')}</th><th>${t('totalCost', 'التكلفة')}</th><th>${t('profit', 'الربح')}</th><th>${t('marginPct', 'الهامش')}</th></tr></thead>
+            <tbody>
+              ${rows.length ? rows.map(r => `
+                <tr>
+                  <td>${escapeHtml(r.name || '—')}</td><td>${r.qtySold}</td><td>${(r.revenue || 0).toLocaleString()}</td>
+                  <td>${r.hasCost ? (r.cost || 0).toLocaleString() : '—'}</td>
+                  <td style="color:${(r.profit || 0) >= 0 ? '#10b981' : '#ef4444'}">${r.hasCost ? (r.profit || 0).toLocaleString() : '—'}</td>
+                  <td>${r.marginPct != null ? r.marginPct + '%' : '—'}</td>
+                </tr>`).join('') : `<tr><td colspan="6" class="empty-state">${t('noData', 'لا بيانات')}</td></tr>`}
+            </tbody>
+          </table></div>
+        </div>
+      </div>`;
+
+    const cols = [
+      { label: t('product', 'Product'), value: r => r.name || '' },
+      { label: t('qtySold', 'Qty'), key: 'qtySold' },
+      { label: t('revenue', 'Revenue'), key: 'revenue' },
+      { label: t('totalCost', 'Cost'), value: r => r.hasCost ? r.cost : '' },
+      { label: t('profit', 'Profit'), value: r => r.hasCost ? r.profit : '' },
+      { label: t('marginPct', 'Margin %'), value: r => r.marginPct != null ? r.marginPct : '' }
+    ];
+    document.getElementById('profXlsx').addEventListener('click', () => window.DZExport && window.DZExport.exportToExcel({ columns: cols, rows: _profitRows, filename: 'dzpospro-profitability', title: t('profitabilityTitle', 'تقرير الربحية') }));
+    document.getElementById('profPdf').addEventListener('click', () => window.DZExport && window.DZExport.exportToPDF({ columns: cols, rows: _profitRows, filename: 'dzpospro-profitability', title: t('profitabilityTitle', 'تقرير الربحية'), landscape: true }));
+  } catch (_) {
+    host.innerHTML = '';
+  }
 }
 
 /* ---------- Live refresh on sale:completed / tab focus ---------- */

@@ -105,6 +105,9 @@ const API_BASE = 'https://dzpospro-production.up.railway.app';
     inventory:  '<line x1="16.5" y1="5.5" x2="7.5" y2="14.5"/><polyline points="21 2 12 11 7 6"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/>',
     users:      '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><circle cx="17" cy="6" r="2" fill="currentColor"/>',
     sessions:   '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+    ai:         '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/><line x1="12" y1="3" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="21"/><line x1="3" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="21" y2="12"/>',
+    audit:      '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>',
+    platform:   '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
     settings:   '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>'
   };
 
@@ -191,7 +194,11 @@ const API_BASE = 'https://dzpospro-production.up.railway.app';
     inventory:       { path: './modules/inventory.js',       fn: 'renderInventoryPage'     },
     users:           { path: './modules/users.js',           fn: 'renderUsersPage'         },
     sessions:        { path: './modules/sessions.js',        fn: 'renderSessionsPage'      },
-    settings:        { path: './modules/settings.js',        fn: 'renderSettingsPage'      }
+    settings:        { path: './modules/settings.js',        fn: 'renderSettingsPage'      },
+    // v3 — AI Center + Audit + Platform console
+    ai:              { path: './modules/ai.js',              fn: 'renderAiPage'            },
+    audit:           { path: './modules/audit.js',           fn: 'renderAuditPage'         },
+    platform:        { path: './modules/platform.js',        fn: 'renderPlatformPage'      }
   };
 
 async function loadPage(page) {
@@ -233,6 +240,18 @@ async function loadPage(page) {
     document.querySelectorAll('.sidebar-nav .nav-item').forEach(a => {
       if (a.dataset.page === page) a.classList.add('active');
       else a.classList.remove('active');
+    });
+  }
+
+  /* ---------- v3: role-based navigation visibility ---------- */
+  function applyRoleNavVisibility() {
+    const role = (currentUser && currentUser.role) || '';
+    document.querySelectorAll('.sidebar-nav .nav-item').forEach(link => {
+      const page = link.dataset.page;
+      let hidden = false;
+      if (page === 'platform') hidden = role !== 'superadmin';
+      if (['audit', 'ai'].includes(page)) hidden = !['admin', 'manager'].includes(role);
+      link.style.display = hidden ? 'none' : '';
     });
   }
 
@@ -342,8 +361,13 @@ async function loadPage(page) {
     if (helpBtn) helpBtn.addEventListener('click', openHelpModal);
     const notifBtn = document.getElementById('notifBtn');
     if (notifBtn) notifBtn.addEventListener('click', () => {
-      if (window.Toast) window.Toast.info(window.t ? window.t('noNewNotifications', 'لا إشعارات جديدة') : 'No new notifications');
+      // v3 — real notification centre (js/notify.js)
+      if (window.DZNotify) window.DZNotify.openPanel();
+      else if (window.Toast) window.Toast.info(window.t ? window.t('noNewNotifications', 'لا إشعارات جديدة') : 'No new notifications');
     });
+
+    // v3 — hide role-restricted nav items
+    applyRoleNavVisibility();
 
     // Language selector
     const langSel = document.getElementById('langSelect');

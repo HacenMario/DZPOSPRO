@@ -42,6 +42,7 @@ const authMiddleware = async (req, res, next) => {
         req.user = user;
         req.userId = user._id;
         req.userRole = user.role;
+        req.storeId = user.role === 'superadmin' ? null : (user.storeId || null);
         next();
     } catch (error) {
         logger.error('Auth middleware failure:', error.message);

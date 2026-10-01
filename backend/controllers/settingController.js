@@ -63,3 +63,30 @@ const updateSetting = async (req, res, next) => {
 };
 
 module.exports = { getSettings, updateSetting };
+
+/* ============================================================
+ * v3 — Platform AI settings (super-admin / store admin)
+ * ============================================================ */
+const PlatformSetting = require('../models/PlatformSetting');
+
+// POST /api/settings/gemini-key  { key }
+const setGeminiKey = async (req, res, next) => {
+    try {
+        const lang = req.lang || 'ar';
+        const key = String((req.body && req.body.key) || '').trim();
+        if (!key) return errorResponse(res, 400, getTranslation('missingFields', lang));
+        await PlatformSetting.set('geminiApiKey', key);
+        return successResponse(res, { ok: true }, getTranslation('saved', lang));
+    } catch (err) { next(err); }
+};
+
+// GET /api/settings/gemini-key-status
+const getGeminiKeyStatus = async (req, res, next) => {
+    try {
+        const key = await PlatformSetting.get('geminiApiKey');
+        return successResponse(res, { configured: !!key, source: key ? 'platform' : (process.env.GEMINI_API_KEY ? 'env' : 'none') });
+    } catch (err) { next(err); }
+};
+
+module.exports.setGeminiKey = setGeminiKey;
+module.exports.getGeminiKeyStatus = getGeminiKeyStatus;

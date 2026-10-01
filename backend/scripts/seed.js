@@ -7,6 +7,8 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
 const logger = require('../utils/logger');
+const { runWithTenant } = require('../services/tenantContext');
+const Store = require('../models/Store');
 
 const User = require('../models/User');
 const Setting = require('../models/Setting');
@@ -62,6 +64,19 @@ async function seed() {
     logger.info(`Connecting to MongoDB: ${MONGO_URI}`);
     await mongoose.connect(MONGO_URI);
     logger.info('MongoDB connected.');
+
+    // v3 — resolve/create the default store and run seeding inside its tenant context
+    let defaultStore = await Store.findOne({}).sort({ createdAt: 1 });
+    if (!defaultStore) {
+        defaultStore = await Store.create({
+            name: process.env.SEED_STORE_NAME || 'DZ POS PRO',
+            plan: 'pro', status: 'active',
+            notes: 'Default store created by seed'
+        });
+        logger.info(`Default store created: "${defaultStore.name}"`);
+    }
+
+    await runWithTenant({ storeId: defaultStore._id, isSuper: false }, async () => {
 
     // 1) Admin user
     const userCount = await User.countDocuments();
@@ -158,6 +173,8 @@ async function seed() {
     } else {
         logger.info('Admin already has an open session.');
     }
+
+    }); // end tenant context
 
     logger.info('Seed completed successfully.');
     await mongoose.disconnect();

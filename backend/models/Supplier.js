@@ -1,7 +1,9 @@
 // backend/models/Supplier.js
 const mongoose = require('mongoose');
+const { tenantPlugin } = require('../utils/tenantPlugin');
 
 const supplierSchema = new mongoose.Schema({
+    storeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Store', index: true, default: null },
     name: {
         ar: { type: String, required: true, trim: true },
         en: { type: String, required: true, trim: true },
@@ -32,5 +34,7 @@ supplierSchema.methods.getName = function (lang = 'ar') {
 supplierSchema.methods.getAddress = function (lang = 'ar') {
     return this.address?.[lang] || this.address?.ar;
 };
+
+supplierSchema.plugin(tenantPlugin);
 
 module.exports = mongoose.model('Supplier', supplierSchema);

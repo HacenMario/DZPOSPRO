@@ -4,6 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#10b981" />
+    <meta name="description" content="DZ POS PRO — نظام نقاط بيع احترافي متعدد المخازن مع ذكاء اصطناعي" />
+    <link rel="manifest" href="manifest.json" />
+    <link rel="icon" type="image/png" href="icons/favicon-64.png" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="DZ POS PRO" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <title data-i18n="appName">DZ POS PRO — Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -12,11 +20,12 @@
     <link rel="stylesheet" href="css/theme-dark.css" />
     <link rel="stylesheet" href="css/main.css" />
     <link rel="stylesheet" href="css/pages.css" />
+    <link rel="stylesheet" href="css/features.css" />
 </head>
 <body>
 <div class="app-shell" id="appShell">
 
-    <!-- ===== Sidebar overlay (mobile) ===== -->
+    <!-- ==== Sidebar overlay (mobile) ==== -->
     <div class="sidebar-overlay" id="sidebarOverlay" aria-hidden="true"></div>
 
     <!-- ===== Sidebar ===== -->
@@ -94,6 +103,11 @@
                     <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
                     <span class="nav-label" data-i18n="reports">التقارير</span>
                 </a>
+                <a class="nav-item" data-page="ai" href="#" role="button" tabindex="0">
+                    <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/><line x1="12" y1="3" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="21"/><line x1="3" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="21" y2="12"/></svg></span>
+                    <span class="nav-label" data-i18n="ai">المساعد الذكي</span>
+                    <span class="nav-badge-ai" title="AI">✨</span>
+                </a>
             </div>
 
             <div class="nav-section">
@@ -113,6 +127,14 @@
                 <a class="nav-item" data-page="settings" href="#" role="button" tabindex="0">
                     <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
                     <span class="nav-label" data-i18n="settings">الإعدادات</span>
+                </a>
+                <a class="nav-item" data-page="audit" href="#" role="button" tabindex="0" style="display:none">
+                    <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span>
+                    <span class="nav-label" data-i18n="audit">سجل التدقيق</span>
+                </a>
+                <a class="nav-item" data-page="platform" href="#" role="button" tabindex="0" style="display:none">
+                    <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+                    <span class="nav-label" data-i18n="platform">منصة المخازن</span>
                 </a>
             </div>
         </nav>
@@ -172,6 +194,7 @@
         <div class="offline-banner" id="offlineBanner" role="alert">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.58 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
             <span data-i18n="offlineMessage">أنت غير متصل. بعض الميزات قد لا تعمل.</span>
+            <span class="sync-chip badge" hidden>⏳ 0</span>
         </div>
 
         <!-- Content -->
@@ -201,10 +224,15 @@
 <script src="js/api.js"></script>
 <script src="js/socket.js"></script>
 <script src="js/i18n.js"></script>
+<script src="js/db.js"></script>
+<script src="js/notify.js"></script>
+<script src="js/exporter.js"></script>
+<script src="vendor/xlsx.full.min.js"></script>
 <!-- receipt.js MUST load before dashboard.js: it provides
      window.printThermalTicket, window.chooseInvoiceLanguage and
      window.invoiceLabels used by the POS + tickets + invoices pages. -->
 <script src="js/receipt.js"></script>
+<script src="js/pwa.js"></script>
 <script src="js/dashboard.js"></script>
 </body>
 </html>

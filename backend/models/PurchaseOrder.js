@@ -1,5 +1,6 @@
 // backend/models/PurchaseOrder.js
 const mongoose = require('mongoose');
+const { tenantPlugin } = require('../utils/tenantPlugin');
 
 const purchaseOrderItemSchema = new mongoose.Schema({
     product: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', default: null },
@@ -13,7 +14,8 @@ const purchaseOrderItemSchema = new mongoose.Schema({
 }, { _id: false });
 
 const purchaseOrderSchema = new mongoose.Schema({
-    orderNumber: { type: String, required: true, unique: true, trim: true },
+    storeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Store', index: true, default: null },
+    orderNumber: { type: String, required: true, trim: true },
     orderDate: { type: Date, default: Date.now },
     expectedDate: { type: Date, default: null },
     supplier: { type: mongoose.Schema.Types.ObjectId, ref: 'Supplier', default: null },
@@ -46,5 +48,9 @@ const purchaseOrderSchema = new mongoose.Schema({
 purchaseOrderSchema.index({ orderDate: -1 });
 purchaseOrderSchema.index({ supplier: 1 });
 purchaseOrderSchema.index({ status: 1 });
+
+purchaseOrderSchema.index({ storeId: 1, orderNumber: 1 });
+
+purchaseOrderSchema.plugin(tenantPlugin);
 
 module.exports = mongoose.model('PurchaseOrder', purchaseOrderSchema);

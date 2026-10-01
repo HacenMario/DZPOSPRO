@@ -4,6 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#10b981" />
+    <link rel="manifest" href="manifest.json" />
+    <link rel="icon" type="image/png" href="icons/favicon-64.png" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="DZ POS PRO" />
+
     <title data-i18n="registerTitle">DZ POS PRO — إنشاء حساب</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -33,6 +39,17 @@
 
             <form id="registerForm" class="login-form" novalidate>
                 <div class="form-group">
+                    <label for="storeName" data-i18n="storeNameField">اسم المتجر</label>
+                    <div class="input-wrap">
+                        <span class="input-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1-5h16l1 5"/><path d="M4 9v11a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9"/><path d="M9 14h6"/></svg>
+                        </span>
+                        <input class="input" type="text" id="storeName" name="storeName" placeholder="" autocomplete="organization" required />
+                    </div>
+                    <div class="help-text" data-i18n="storeNameHelp">سيُنشأ متجرك بتجربة مجانية 14 يوماً ✓</div>
+                </div>
+
+                <div class="form-group">
                     <label for="name" data-i18n="name">الاسم</label>
                     <div class="input-wrap">
                         <span class="input-icon" aria-hidden="true">
@@ -52,19 +69,7 @@
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label for="role" data-i18n="role">الدور</label>
-                    <div class="input-wrap">
-                        <span class="input-icon" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                        </span>
-                        <select class="input" id="role" name="role" required style="padding-inline-start:2.5rem;appearance:none;-webkit-appearance:none;-moz-appearance:none;background:var(--bg-input);">
-                            <option value="cashier" data-i18n="roleCashier">كاشير</option>
-                            <option value="manager" data-i18n="roleManager">مدير فرعي</option>
-                            <option value="admin" data-i18n="roleAdmin">مدير</option>
-                        </select>
-                    </div>
-                </div>
+                <!-- SaaS: registration always creates a store owner (admin) — role select removed -->
 
                 <div class="form-group">
                     <label for="password" data-i18n="password">كلمة المرور</label>
@@ -151,16 +156,16 @@
                 clearError();
 
                 const name = document.getElementById('name').value.trim();
+                const storeName = document.getElementById('storeName').value.trim();
                 const email = document.getElementById('email').value.trim();
                 const password = document.getElementById('password').value;
                 const confirmPassword = document.getElementById('confirmPassword').value;
-                const role = document.getElementById('role').value;
 
+                if (!storeName || storeName.length < 2) { showError('Store name must be at least 2 characters'); return; }
                 if (!name || name.length < 2) { showError('Name must be at least 2 characters'); return; }
                 if (!email) { showError('Email is required'); return; }
                 if (password.length < 6) { showError('Password must be at least 6 characters'); return; }
                 if (password !== confirmPassword) { showError('Passwords do not match'); return; }
-                if (!['admin', 'manager', 'cashier'].includes(role)) { showError('Invalid role'); return; }
 
                 const btn = document.getElementById('registerBtn');
                 btn.classList.add('is-loading');
@@ -168,18 +173,32 @@
 
 try {
     const API_BASE = 'https://dzpospro-production.up.railway.app';
-    const res = await fetch(`${API_BASE}/api/auth/register`, {
+    // v3 — SaaS store registration: creates the Store (14-day trial) + its admin owner
+    const res = await fetch(`${API_BASE}/api/auth/register-store`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password, role })
+        body: JSON.stringify({ storeName, ownerName: name, name, email, password })
     });
     const data = await res.json();
 
     if (res.ok && data.success) {
-        if (typeof window.Toast !== 'undefined' && window.Toast.success) {
-            window.Toast.success('Account created successfully! Please login.');
+        // auto-login: v3 returns a token immediately
+        const payload = (data.data && data.data.token) ? data.data : null;
+        if (payload && payload.token) {
+            try {
+                localStorage.setItem('token', payload.token);
+                localStorage.setItem('user', JSON.stringify(payload.user || {}));
+            } catch (_) {}
+            if (typeof window.Toast !== 'undefined' && window.Toast.success) {
+                window.Toast.success('🎉 Store created! Welcome to DZ POS PRO');
+            }
+            setTimeout(() => { window.location.href = 'dashboard.html'; }, 1200);
+        } else {
+            if (typeof window.Toast !== 'undefined' && window.Toast.success) {
+                window.Toast.success('Store created successfully! Please login.');
+            }
+            setTimeout(() => { window.location.href = 'index.html?registered=1'; }, 1500);
         }
-        setTimeout(() => { window.location.href = 'index.html?registered=1'; }, 1500);
     } else {
         let msg = (data && data.message) || 'Registration failed';
         if (data && Array.isArray(data.errors) && data.errors.length) {
@@ -197,5 +216,6 @@ try {
         }
     })();
     </script>
+<script src="js/pwa.js"></script>
 </body>
 </html>

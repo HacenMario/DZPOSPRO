@@ -45,9 +45,10 @@
 
     socket.on('connect', () => {
       console.log('[socket] connected:', socket.id);
-      // Backend joins `user_<id>` room on `join`
+      // Backend joins `user_<id>` room on `join` (+ `store_<storeId>` in v3)
       const userId = user.id || user._id;
-      if (userId) socket.emit('join', userId);
+      const storeId = user.storeId || null;
+      if (userId) socket.emit('join', { userId, storeId });
     });
 
     socket.on('connect_error', (err) => {
@@ -59,14 +60,20 @@
     });
 
     socket.on('notification', (notification) => {
+      // v3 — route through the notification centre (badge + panel refresh)
+      if (window.DZNotify && window.DZNotify.handleRealtime) {
+        try { window.DZNotify.handleRealtime(notification); } catch (_) {}
+      }
       if (!notification || typeof window.Toast === 'undefined') return;
-      const msg = notification.message || '';
+      const msg = notification.message || notification.body || '';
       const title = notification.title;
       const type = (notification.type || 'info').toLowerCase();
       const opts = title ? { title } : {};
+      if (!msg) return;
       if (type === 'success' && Toast.success) Toast.success(msg, opts);
       else if (type === 'error' && Toast.error) Toast.error(msg, opts);
       else if (type === 'warning' && Toast.warning) Toast.warning(msg, opts);
+      else if (type === 'ai' && Toast.info) Toast.info(msg, { title: title || '🤖' });
       else if (Toast.info) Toast.info(msg, opts);
     });
 

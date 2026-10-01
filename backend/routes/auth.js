@@ -15,6 +15,9 @@ router.post('/login', loginLimiter, loginValidation, authController.login);
 // Admin/manager accounts can only be created by an admin via the Users page.
 router.post('/register', registerValidation, authController.register);
 
+// SaaS: public store self-signup (creates Store + its admin user, 14-day trial)
+router.post('/register-store', authController.registerStore);
+
 // Check if registration is open — always returns open: true
 router.get('/register-status', async (req, res) => {
     try {

@@ -1,5 +1,6 @@
 // backend/models/User.js
 const mongoose = require('mongoose');
+const { tenantPlugin } = require('../utils/tenantPlugin');
 const bcrypt = require('bcryptjs');
 
 const userSettingsSchema = new mongoose.Schema({
@@ -9,11 +10,12 @@ const userSettingsSchema = new mongoose.Schema({
 }, { _id: false });
 
 const userSchema = new mongoose.Schema({
+    storeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Store', index: true, default: null },
     name: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     password: { type: String, required: true, select: false },
     phone: { type: String, default: '' },
-    role: { type: String, enum: ['admin', 'manager', 'cashier'], default: 'cashier' },
+    role: { type: String, enum: ['admin', 'manager', 'cashier', 'superadmin'], default: 'cashier' },
     isActive: { type: Boolean, default: true },
     settings: { type: userSettingsSchema, default: () => ({}) },
     lastLogin: { type: Date },
@@ -33,5 +35,7 @@ userSchema.pre('save', async function (next) {
 userSchema.methods.comparePassword = async function (candidatePassword) {
     return await bcrypt.compare(candidatePassword, this.password);
 };
+
+userSchema.plugin(tenantPlugin);
 
 module.exports = mongoose.model('User', userSchema);

@@ -1,13 +1,15 @@
 // backend/models/Customer.js
 const mongoose = require('mongoose');
+const { tenantPlugin } = require('../utils/tenantPlugin');
 
 const customerSchema = new mongoose.Schema({
+    storeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Store', index: true, default: null },
     name: {
         ar: { type: String, required: true, trim: true },
         en: { type: String, required: true, trim: true },
         fr: { type: String, required: true, trim: true }
     },
-    phone: { type: String, required: true, unique: true, trim: true },
+    phone: { type: String, required: true, trim: true },
     email: { type: String, default: '', trim: true },
     address: {
         ar: { type: String, default: '' },
@@ -27,7 +29,6 @@ const customerSchema = new mongoose.Schema({
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }
 }, { timestamps: true });
 
-customerSchema.index({ phone: 1 });
 customerSchema.index({ 'name.ar': 'text' });
 
 customerSchema.methods.getName = function (lang = 'ar') {
@@ -36,5 +37,9 @@ customerSchema.methods.getName = function (lang = 'ar') {
 customerSchema.methods.getAddress = function (lang = 'ar') {
     return this.address?.[lang] || this.address?.ar;
 };
+
+customerSchema.index({ storeId: 1, phone: 1 });
+
+customerSchema.plugin(tenantPlugin);
 
 module.exports = mongoose.model('Customer', customerSchema);

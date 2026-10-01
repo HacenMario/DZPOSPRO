@@ -1,7 +1,9 @@
 // backend/models/Session.js
 const mongoose = require('mongoose');
+const { tenantPlugin } = require('../utils/tenantPlugin');
 
 const sessionSchema = new mongoose.Schema({
+    storeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Store', index: true, default: null },
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     userName: { type: String, required: true },
     userRole: { type: String, default: 'cashier' },
@@ -31,5 +33,7 @@ const sessionSchema = new mongoose.Schema({
 
 sessionSchema.index({ user: 1, status: 1 });
 sessionSchema.index({ openedAt: -1 });
+
+sessionSchema.plugin(tenantPlugin);
 
 module.exports = mongoose.model('Session', sessionSchema);

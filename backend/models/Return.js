@@ -1,5 +1,6 @@
 // backend/models/Return.js
 const mongoose = require('mongoose');
+const { tenantPlugin } = require('../utils/tenantPlugin');
 
 const returnItemSchema = new mongoose.Schema({
     saleItem: { type: mongoose.Schema.Types.ObjectId, ref: 'SaleItem' },
@@ -11,7 +12,8 @@ const returnItemSchema = new mongoose.Schema({
 }, { _id: false });
 
 const returnSchema = new mongoose.Schema({
-    returnNumber: { type: String, unique: true, sparse: true },
+    storeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Store', index: true, default: null },
+    returnNumber: { type: String },
     sale: { type: mongoose.Schema.Types.ObjectId, ref: 'Sale', required: true },
     items: [returnItemSchema],
     reason: {
@@ -25,5 +27,9 @@ const returnSchema = new mongoose.Schema({
 
 returnSchema.index({ sale: 1 });
 returnSchema.index({ createdAt: -1 });
+
+returnSchema.index({ storeId: 1, returnNumber: 1 });
+
+returnSchema.plugin(tenantPlugin);
 
 module.exports = mongoose.model('Return', returnSchema);

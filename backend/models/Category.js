@@ -1,7 +1,9 @@
 // backend/models/Category.js
 const mongoose = require('mongoose');
+const { tenantPlugin } = require('../utils/tenantPlugin');
 
 const categorySchema = new mongoose.Schema({
+    storeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Store', index: true, default: null },
     name: {
         ar: { type: String, required: true, trim: true },
         en: { type: String, required: true, trim: true },
@@ -26,5 +28,7 @@ categorySchema.methods.getName = function (lang = 'ar') {
 categorySchema.methods.getDescription = function (lang = 'ar') {
     return this.description?.[lang] || this.description?.ar;
 };
+
+categorySchema.plugin(tenantPlugin);
 
 module.exports = mongoose.model('Category', categorySchema);

@@ -72,7 +72,12 @@ function renderTabs() {
     { id: 'store',       label: t('storeProfile', 'Store profile'),     icon: '<path d="M3 9l1-5h16l1 5"/><path d="M5 9v11h14V9"/><line x1="9" y1="13" x2="15" y2="13"/>' },
     { id: 'company',     label: t('companyInfo', 'Company / Fiscal'),   icon: '<path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/>' },
     { id: 'profile',     label: t('myProfile', 'My profile'),           icon: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>' },
-    { id: 'appearance',  label: t('appearance', 'Appearance'),          icon: '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>' }
+    { id: 'appearance',  label: t('appearance', 'Appearance'),          icon: '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>' },
+    // v3 — AI + smart alerts (admin/manager only)
+    ...(state.isAdmin ? [
+      { id: 'ai',          label: '🤖 ' + t('aiTab', 'الذكاء الاصطناعي'),          icon: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/>' },
+      { id: 'alerts',      label: '🔔 ' + t('alertsTab', 'التنبيهات الذكية'),      icon: '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>' }
+    ] : [])
   ];
   return `
     <div class="tabs">
@@ -561,6 +566,8 @@ function renderTabContent() {
     case 'company':    return renderCompanyTab();
     case 'profile':    return renderProfileTab();
     case 'appearance': return renderAppearanceTab();
+    case 'ai':         return renderAiTab();
+    case 'alerts':     return renderAlertsTab();
     default:           return renderStoreTab();
   }
 }
@@ -571,6 +578,8 @@ function bindTabContent() {
     case 'company':    bindCompanyTab(); break;
     case 'profile':    bindProfileTab(); break;
     case 'appearance': bindAppearanceTab(); break;
+    case 'ai':         bindAiTab(); break;
+    case 'alerts':     bindAlertsTab(); break;
   }
 }
 
@@ -634,6 +643,178 @@ async function loadCurrentUser() {
     // /me might fail; rely on localStorage user
     console.warn('[settings] /auth/me', err);
   }
+}
+
+/* ---------- v3 — AI settings tab ---------- */
+function renderAiTab() {
+  const isAdmin = state.isAdmin;
+  return `
+    <div class="card">
+      <div class="card-header"><div class="card-title">🤖 ${t('aiTabTitle', 'إعداد Google Gemini (مجاني)')}</div></div>
+      <div class="card-body">
+        <p class="muted" style="margin-bottom:12px">${t('aiTabHint', 'احصل على مفتاح API مجاني من aistudio.google.com/apikey ثم الصقه هنا لتفعيل كل ميزات الذكاء الاصطناعي: المساعد الذكي، قراءة فواتير الموردين، التنبؤ، كشف الشواذ، والملخص اليومي.')}</p>
+        ${isAdmin ? `
+        <div class="form-grid">
+          <div class="form-field">
+            <label>${t('geminiKey', 'مفتاح Gemini API')}</label>
+            <input type="password" class="input" id="geminiKeyInput" placeholder="AIza..." autocomplete="off" />
+            <small class="muted">${t('geminiKeyStored', 'يُخزَّن في الخادم بأمان (إعدادات المنصة)')}</small>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+          <button class="btn btn-primary" id="saveGeminiKey">💾 ${t('saveKey', 'حفظ المفتاح')}</button>
+          <button class="btn btn-secondary" id="testAi">⚡ ${t('testAi', 'اختبار الاتصال')}</button>
+        </div>
+        <div id="aiTestResult" style="margin-top:10px"></div>` : `<p class="muted">${t('adminOnly', 'Admin only')}</p>`}
+        <hr style="margin:16px 0;border-color:var(--border,#e5e7eb)" />
+        <h4 style="margin-bottom:8px">📲 ${t('pushSettings', 'إشعارات الهاتف (Web Push)')}</h4>
+        <p class="muted" style="margin-bottom:10px">${t('pushHint', 'تعمل الإشعارات في الخلفية حتى لو كان الموقع مغلقاً أو الشاشة مطفأة (ثبّت التطبيق على الهاتف لأفضل نتيجة).')}</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary" id="enablePushBtn">🔔 ${t('enablePush', 'تفعيل إشعارات الهاتف')}</button>
+          <button class="btn btn-secondary" id="testPushBtn">📨 ${t('testPush', 'إرسال إشعار تجريبي')}</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function bindAiTab() {
+  const saveBtn = document.getElementById('saveGeminiKey');
+  const testBtn = document.getElementById('testAi');
+  const out = document.getElementById('aiTestResult');
+  if (saveBtn) saveBtn.addEventListener('click', async () => {
+    const key = document.getElementById('geminiKeyInput').value.trim();
+    if (!key) return;
+    try {
+      await apiFetch.post('/api/settings/gemini-key', { key });
+      window.Toast && Toast.success(t('saved', 'تم الحفظ'));
+    } catch (err) { window.Toast && Toast.error(err.message); }
+  });
+  if (testBtn) testBtn.addEventListener('click', async () => {
+    if (out) out.innerHTML = '<div class="loading-state"><div class="spinner"></div></div>';
+    try {
+      const res = await apiFetch.post('/api/ai/daily-summary', { lang: (window.currentLang || 'ar') });
+      const text = (res.data && res.data.text) || '';
+      if (out) out.innerHTML = `<div class="ai-narrative card"><strong>✅</strong><div>${String(text).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\n/g,'<br/>').slice(0, 600)}</div></div>`;
+    } catch (err) {
+      if (out) out.innerHTML = `<div class="empty-state"><div class="empty-title">⛔ ${String(err.message).replace(/</g,'&lt;')}</div></div>`;
+    }
+  });
+  const enableBtn = document.getElementById('enablePushBtn');
+  if (enableBtn) enableBtn.addEventListener('click', async () => {
+    if (window.DZPWA) await window.DZPWA.enablePush(false);
+  });
+  const testPushBtn = document.getElementById('testPushBtn');
+  if (testPushBtn) testPushBtn.addEventListener('click', async () => {
+    try {
+      const r = await apiFetch.post('/api/push/test');
+      const sent = r.data && r.data.sent;
+      window.Toast && (sent > 0 ? Toast.success(t('pushSent', 'أُرسل الإشعار ✓ (قد يستغرق ثوانٍ)')) : Toast.warning(t('pushNoDevice', 'لا أجهزة مشتركة — فعّل الإشعارات أولاً')));
+    } catch (err) { window.Toast && Toast.error(err.message); }
+  });
+}
+
+/* ---------- v3 — Smart alerts tab ---------- */
+const ALERT_DEFS = [
+  { type: 'lowStock',     icon: '📦', thLabel: 'lowStockTh',   thHint: 'lowStockThHint' },
+  { type: 'zeroSalesDay', icon: '🌤️', thLabel: 'zeroSalesTh',  thHint: 'zeroSalesThHint' },
+  { type: 'dailyTarget',  icon: '🎯', thLabel: 'targetTh',     thHint: 'targetThHint' },
+  { type: 'anomalyScan',  icon: '🛡️', thLabel: 'anomalyTh',    thHint: 'anomalyThHint' },
+  { type: 'dailySummary', icon: '🌙', thLabel: 'summaryTh',    thHint: 'summaryThHint' }
+];
+
+function renderAlertsTab() {
+  const list = (state.alertConfigs || []).map(c => {
+    const def = ALERT_DEFS.find(d => d.type === c.type) || {};
+    const roleChecks = ['admin', 'manager', 'cashier'].map(r =>
+      `<label style="margin-inline-end:12px"><input type="checkbox" class="alert-role" data-type="${c.type}" value="${r}" ${(c.notifyRoles || []).includes(r) ? 'checked' : ''}/> ${t('role' + r.charAt(0).toUpperCase() + r.slice(1), r)}</label>`
+    ).join('');
+    return `
+      <div class="card" style="margin-bottom:12px">
+        <div class="card-body" style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">
+          <div style="font-size:28px">${def.icon || '🔔'}</div>
+          <div style="flex:1;min-width:260px">
+            <div style="display:flex;gap:10px;align-items:center;margin-bottom:6px">
+              <strong>${t('alert_' + c.type, c.type)}</strong>
+              <label style="margin-inline-start:auto"><input type="checkbox" class="alert-enabled" data-type="${c.type}" ${c.enabled ? 'checked' : ''}/> ${t('active', 'نشط')}</label>
+            </div>
+            <div class="form-field" style="max-width:280px">
+              <label>${t(def.thLabel, 'الحد')}</label>
+              <input type="number" class="input alert-th" data-type="${c.type}" value="${c.threshold || 0}" />
+              <small class="muted">${t(def.thHint, '')}</small>
+            </div>
+            <div style="margin-top:6px">${roleChecks}</div>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+  return `
+    <div class="card">
+      <div class="card-header"><div class="card-title">🔔 ${t('alertsTabTitle', 'التنبيهات الذكية القابلة للتهيئة')}</div></div>
+      <div class="card-body">
+        <p class="muted" style="margin-bottom:12px">${t('alertsTabHint', 'لكل تنبيه: فعّله، اضبط حدّه، واختر من يستقبل الإشعار (داخل المنصة + إشعار الهاتف).')}</p>
+        <div id="alertsList">${list || '<div class="loading-state"><div class="spinner"></div></div>'}</div>
+        <button class="btn btn-primary" id="saveAlerts" style="margin-top:12px">💾 ${t('save', 'حفظ')}</button>
+      </div>
+    </div>`;
+}
+
+async function bindAlertsTab() {
+  // load configs
+  try {
+    const r = await apiFetch.get('/api/alerts');
+    state.alertConfigs = (r.data && r.data.data) || r.data || [];
+    const listEl = document.getElementById('alertsList');
+    if (listEl) { listEl.innerHTML = renderAlertsListInner(); }
+  } catch (_) {}
+  const saveBtn = document.getElementById('saveAlerts');
+  if (saveBtn) saveBtn.addEventListener('click', async () => {
+    const types = ALERT_DEFS.map(d => d.type);
+    try {
+      for (const type of types) {
+        const enabledEl = document.querySelector(`.alert-enabled[data-type="${type}"]`);
+        const thEl = document.querySelector(`.alert-th[data-type="${type}"]`);
+        const roles = Array.from(document.querySelectorAll(`.alert-role[data-type="${type}"]:checked`)).map(c => c.value);
+        await apiFetch.put('/api/alerts/' + type, {
+          enabled: enabledEl ? enabledEl.checked : undefined,
+          threshold: thEl ? Number(thEl.value) || 0 : undefined,
+          notifyRoles: roles
+        });
+      }
+      window.Toast && Toast.success(t('saved', 'تم الحفظ ✓'));
+    } catch (err) { window.Toast && Toast.error(err.message); }
+  });
+}
+
+function renderAlertsListInner() {
+  state.alertConfigs = state.alertConfigs || [];
+  const tmp = renderAlertsTab;
+  // reuse the same markup minus the outer card/save button
+  const list = (state.alertConfigs || []).map(c => {
+    const def = ALERT_DEFS.find(d => d.type === c.type) || {};
+    const roleChecks = ['admin', 'manager', 'cashier'].map(r =>
+      `<label style="margin-inline-end:12px"><input type="checkbox" class="alert-role" data-type="${c.type}" value="${r}" ${(c.notifyRoles || []).includes(r) ? 'checked' : ''}/> ${t('role' + r.charAt(0).toUpperCase() + r.slice(1), r)}</label>`
+    ).join('');
+    return `
+      <div class="card" style="margin-bottom:12px">
+        <div class="card-body" style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">
+          <div style="font-size:28px">${def.icon || '🔔'}</div>
+          <div style="flex:1;min-width:260px">
+            <div style="display:flex;gap:10px;align-items:center;margin-bottom:6px">
+              <strong>${t('alert_' + c.type, c.type)}</strong>
+              <label style="margin-inline-start:auto"><input type="checkbox" class="alert-enabled" data-type="${c.type}" ${c.enabled ? 'checked' : ''}/> ${t('active', 'نشط')}</label>
+            </div>
+            <div class="form-field" style="max-width:280px">
+              <label>${t(def.thLabel, 'الحد')}</label>
+              <input type="number" class="input alert-th" data-type="${c.type}" value="${c.threshold || 0}" />
+              <small class="muted">${t(def.thHint, '')}</small>
+            </div>
+            <div style="margin-top:6px">${roleChecks}</div>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+  void tmp;
+  return list;
 }
 
 /* ---------- Entry ---------- */

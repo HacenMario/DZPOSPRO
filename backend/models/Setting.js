@@ -2,6 +2,7 @@
 // Singleton document (query with findOne()). Generic placeholders — real
 // company data is loaded by scripts/seed.js.
 const mongoose = require('mongoose');
+const { tenantPlugin } = require('../utils/tenantPlugin');
 
 const companyInfoSchema = new mongoose.Schema({
     rc: { type: String, default: '' },
@@ -15,6 +16,7 @@ const companyInfoSchema = new mongoose.Schema({
 }, { _id: false });
 
 const settingSchema = new mongoose.Schema({
+    storeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Store', index: true, default: null },
     storeName: { type: String, default: 'DZ POS PRO', trim: true },
     currency: { type: String, default: 'DZD' },
     taxRate: { type: Number, default: 0, min: 0 },
@@ -45,5 +47,7 @@ const settingSchema = new mongoose.Schema({
     currentInvoiceCounter: { type: Number, default: 0 },
     lastInvoiceNumber: { type: Number, default: 0 }
 }, { timestamps: true });
+
+settingSchema.plugin(tenantPlugin);
 
 module.exports = mongoose.model('Setting', settingSchema);

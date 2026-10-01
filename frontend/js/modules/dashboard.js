@@ -411,6 +411,8 @@ export async function renderDashboardPage() {
   content.innerHTML = `
     ${renderStatCards(stats)}
 
+    <div id="kpiExecutive"></div>
+
     <div class="chart-grid">
       <div class="card">
         <div class="card-header">
@@ -479,6 +481,9 @@ export async function renderDashboardPage() {
   renderSalesTrendChart(labels, counts, revenues);
   if (catLabels.length) renderCategoryDoughnut(catLabels, catData);
 
+  // v3 — Executive KPI section (async, degrades silently)
+  loadExecutiveKpi();
+
   // Bind "Show more" recent-sales modal
   const showAllBtn = document.getElementById('dashShowAllRecent');
   if (showAllBtn) {
@@ -489,6 +494,99 @@ export async function renderDashboardPage() {
   setupLiveRefresh();
   // Record render time so the visibilitychange throttle works
   window._lastDashboardRender = Date.now();
+}
+
+/* ---------- v3: Executive KPI ---------- */
+const _kpiCharts = [];
+async function loadExecutiveKpi() {
+  const host = document.getElementById('kpiExecutive');
+  if (!host) return;
+  try {
+    const res = await apiFetch.get('/api/reports/kpi', { days: 30 });
+    const k = res.data || res;
+    if (!k || !k.current) return;
+    const delta = k.deltas || { revenuePct: 0, countPct: 0 };
+    const deltaCls = (v) => v >= 0 ? 'up' : 'down';
+    const arrow = (v) => v >= 0 ? '▲' : '▼';
+
+    host.innerHTML = `
+      <div class="kpi-exec-grid">
+        <div class="card kpi-exec-card">
+          <div class="kpi-exec-label">💰 ${t('revenue', 'Revenue')} (30)</div>
+          <div class="kpi-exec-value">${(k.current.revenue || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+          <div class="kpi-delta ${deltaCls(delta.revenuePct)}">${arrow(delta.revenuePct)} ${Math.abs(delta.revenuePct)}% ${t('vsLastPeriod', 'vs previous')}</div>
+        </div>
+        <div class="card kpi-exec-card">
+          <div class="kpi-exec-label">🧾 ${t('salesCount', 'Sales count')} (30)</div>
+          <div class="kpi-exec-value">${k.current.count || 0}</div>
+          <div class="kpi-delta ${deltaCls(delta.countPct)}">${arrow(delta.countPct)} ${Math.abs(delta.countPct)}% ${t('vsLastPeriod', 'vs previous')}</div>
+        </div>
+        <div class="card kpi-exec-card">
+          <div class="kpi-exec-label">🧮 ${t('avgBasket', 'Average basket')}</div>
+          <div class="kpi-exec-value">${(k.avgBasket || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+          <div class="kpi-delta">DZD</div>
+        </div>
+        <div class="card kpi-exec-card">
+          <div class="kpi-exec-label">📅 ${t('salesToday', 'Today')} / ${t('yesterday', 'Yesterday')}</div>
+          <div class="kpi-exec-value">${(k.today.revenue || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+          <div class="kpi-delta">${t('yesterday', 'Yesterday')}: ${(k.yesterday.revenue || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+        </div>
+      </div>
+      <div class="card mb-4">
+        <div class="card-header"><div class="card-title"><span>📈 ${t('kpiRevenue30', 'Revenue — last 30 days')}</span></div>
+          <div class="export-btns">
+            <button class="btn btn-secondary btn-sm" id="kpiXlsx">📊 Excel</button>
+            <button class="btn btn-secondary btn-sm" id="kpiPdf">📄 PDF</button>
+          </div>
+        </div>
+        <div class="card-body"><div class="chart-canvas-wrap" style="height:240px"><canvas id="kpiSeriesChart"></canvas></div></div>
+      </div>
+      <div class="card mb-4">
+        <div class="card-header"><div class="card-title"><span>⏰ ${t('kpiPeakHours', 'Peak hours (30 days)')}</span></div></div>
+        <div class="card-body"><div class="chart-canvas-wrap" style="height:200px"><canvas id="kpiHourChart"></canvas></div></div>
+      </div>`;
+
+    // 30-day series chart
+    const series = k.series || [];
+    const sEl = document.getElementById('kpiSeriesChart');
+    if (sEl && typeof Chart !== 'undefined') {
+      _kpiCharts.push(new Chart(sEl.getContext('2d'), {
+        type: 'line',
+        data: {
+          labels: series.map(s => s.date.slice(5)),
+          datasets: [{ label: t('revenue', 'Revenue'), data: series.map(s => s.revenue), borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.12)', fill: true, tension: 0.35, pointRadius: 0, borderWidth: 2 }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+      }));
+    }
+    // hour distribution
+    const hours = k.byHour || [];
+    const hEl = document.getElementById('kpiHourChart');
+    if (hEl && typeof Chart !== 'undefined') {
+      const hourMap = new Map(hours.map(h => [h.hour, h.revenue]));
+      const allHours = Array.from({ length: 24 }, (_, i) => i);
+      _kpiCharts.push(new Chart(hEl.getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: allHours.map(h => String(h).padStart(2, '0') + ':00'),
+          datasets: [{ label: t('revenue', 'Revenue'), data: allHours.map(h => hourMap.get(h) || 0), backgroundColor: 'rgba(16,185,129,0.75)', borderRadius: 4 }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+      }));
+    }
+
+    // exports
+    const xlsxBtn = document.getElementById('kpiXlsx');
+    const pdfBtn = document.getElementById('kpiPdf');
+    if (xlsxBtn) xlsxBtn.addEventListener('click', () => window.DZExport && window.DZExport.exportToExcel({
+      columns: [{ label: t('date'), key: 'date' }, { label: t('revenue'), key: 'revenue' }, { label: t('salesCount', 'Sales'), key: 'count' }],
+      rows: series, filename: 'dzpospro-kpi-30d', title: t('kpiRevenue30', 'Revenue — last 30 days')
+    }));
+    if (pdfBtn) pdfBtn.addEventListener('click', () => window.DZExport && window.DZExport.exportToPDF({
+      columns: [{ label: t('date'), key: 'date' }, { label: t('revenue'), key: 'revenue' }, { label: t('salesCount', 'Sales'), key: 'count' }],
+      rows: series, filename: 'dzpospro-kpi-30d', title: t('kpiRevenue30', 'Revenue — last 30 days'), landscape: true
+    }));
+  } catch (_) { /* silent — KPI is an enhancement */ }
 }
 
 /* ---------- Live refresh on sale:completed / tab focus ---------- */

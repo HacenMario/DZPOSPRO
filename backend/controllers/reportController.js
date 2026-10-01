@@ -285,10 +285,137 @@ const getInventoryReport = async (req, res, next) => {
     }
 };
 
+/* ============================================================
+ * v3 — Executive KPI + Profitability (tenant-scoped)
+ * ============================================================ */
+const tenantScope = require('../utils/tenantPlugin').tenantScope;
+
+// GET /api/reports/kpi?days=30
+const getKpi = async (req, res, next) => {
+    try {
+        const lang = req.lang || 'ar';
+        const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 7), 365);
+        const since = new Date(Date.now() - days * 24 * 3600 * 1000);
+        const prevSince = new Date(Date.now() - 2 * days * 24 * 3600 * 1000);
+        const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+        const yStart = new Date(todayStart.getTime() - 24 * 3600 * 1000);
+
+        const base = { status: { $nin: ['cancelled'] }, ...tenantScope() };
+
+        const [cur, prev, today, yesterday, series, byHour, byPay, topProd, topCust, lowStock] = await Promise.all([
+            Sale.aggregate([{ $match: { ...base, saleDate: { $gte: since } } }, { $group: { _id: null, revenue: { $sum: '$total' }, count: { $sum: 1 } } }]),
+            Sale.aggregate([{ $match: { ...base, saleDate: { $gte: prevSince, $lt: since } } }, { $group: { _id: null, revenue: { $sum: '$total' }, count: { $sum: 1 } } }]),
+            Sale.aggregate([{ $match: { ...base, saleDate: { $gte: todayStart } } }, { $group: { _id: null, revenue: { $sum: '$total' }, count: { $sum: 1 } } }]),
+            Sale.aggregate([{ $match: { ...base, saleDate: { $gte: yStart, $lt: todayStart } } }, { $group: { _id: null, revenue: { $sum: '$total' }, count: { $sum: 1 } } }]),
+            Sale.aggregate([
+                { $match: { ...base, saleDate: { $gte: since } } },
+                { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$saleDate' } }, revenue: { $sum: '$total' }, count: { $sum: 1 } } },
+                { $sort: { _id: 1 } }
+            ]),
+            Sale.aggregate([
+                { $match: { ...base, saleDate: { $gte: since } } },
+                { $project: { hour: { $hour: '$saleDate' }, total: 1 } },
+                { $group: { _id: '$hour', revenue: { $sum: '$total' }, count: { $sum: 1 } } },
+                { $sort: { _id: 1 } }
+            ]),
+            Sale.aggregate([{ $match: { ...base, saleDate: { $gte: since } } }, { $group: { _id: '$paymentMethod', revenue: { $sum: '$total' }, count: { $sum: 1 } } }]),
+            SaleItem.aggregate([
+                { $lookup: { from: 'sales', localField: 'sale', foreignField: '_id', as: '_s' } },
+                { $unwind: '$_s' },
+                { $match: { '_s.status': { $nin: ['cancelled'] }, '_s.saleDate': { $gte: since }, ...(tenantScope().storeId ? { '_s.storeId': tenantScope().storeId } : {}) } },
+                { $group: { _id: '$productName', qty: { $sum: '$quantity' }, revenue: { $sum: '$total' } } },
+                { $sort: { revenue: -1 } }, { $limit: 8 }
+            ]),
+            Sale.aggregate([
+                { $match: { ...base, saleDate: { $gte: since }, customer: { $ne: null } } },
+                { $lookup: { from: 'customers', localField: 'customer', foreignField: '_id', as: 'c' } },
+                { $unwind: '$c' },
+                { $group: { _id: '$customer', name: { $first: '$c.name' }, revenue: { $sum: '$total' }, count: { $sum: 1 } } },
+                { $sort: { revenue: -1 } }, { $limit: 8 }
+            ]),
+            Product.countDocuments({ ...tenantScope(), status: 'active', $expr: { $lte: ['$stock', { $ifNull: ['$minStock', 5] }] } })
+        ]);
+
+        const c = cur[0] || { revenue: 0, count: 0 };
+        const p = prev[0] || { revenue: 0, count: 0 };
+        const revenueDelta = p.revenue > 0 ? ((c.revenue - p.revenue) / p.revenue) * 100 : (c.revenue > 0 ? 100 : 0);
+        const countDelta = p.count > 0 ? ((c.count - p.count) / p.count) * 100 : (c.count > 0 ? 100 : 0);
+
+        // fill missing days in the series
+        const seriesMap = new Map(series.map(s => [s._id, s]));
+        const fullSeries = [];
+        for (let i = days - 1; i >= 0; i--) {
+            const d = new Date(Date.now() - i * 24 * 3600 * 1000).toISOString().slice(0, 10);
+            const hit = seriesMap.get(d);
+            fullSeries.push({ date: d, revenue: Math.round(((hit && hit.revenue) || 0) * 100) / 100, count: (hit && hit.count) || 0 });
+        }
+
+        return successResponse(res, {
+            range: { days },
+            current: { revenue: Math.round(c.revenue * 100) / 100, count: c.count },
+            previous: { revenue: Math.round(p.revenue * 100) / 100, count: p.count },
+            deltas: { revenuePct: Math.round(revenueDelta * 10) / 10, countPct: Math.round(countDelta * 10) / 10 },
+            today: today[0] || { revenue: 0, count: 0 },
+            yesterday: yesterday[0] || { revenue: 0, count: 0 },
+            avgBasket: c.count ? Math.round((c.revenue / c.count) * 100) / 100 : 0,
+            series: fullSeries,
+            byHour: byHour.map(h => ({ hour: h._id, revenue: Math.round(h.revenue * 100) / 100, count: h.count })),
+            payments: byPay.map(x => ({ method: x._id, revenue: Math.round(x.revenue * 100) / 100, count: x.count })),
+            topProducts: topProd.map(x => ({ name: x._id || '—', qty: x.qty, revenue: Math.round(x.revenue * 100) / 100 })),
+            topCustomers: topCust.map(x => ({ name: x.name, revenue: Math.round(x.revenue * 100) / 100, count: x.count })),
+            lowStockCount: lowStock,
+            lang
+        });
+    } catch (err) { next(err); }
+};
+
+// GET /api/reports/profitability?from&to  — real margin per product
+const getProfitability = async (req, res, next) => {
+    try {
+        const lang = req.lang || 'ar';
+        const { from, to } = parseRange(req.query);
+        const rows = await SaleItem.aggregate([
+            { $lookup: { from: 'sales', localField: 'sale', foreignField: '_id', as: '_s' } },
+            { $unwind: '$_s' },
+            { $match: { '_s.status': { $nin: ['cancelled'] }, '_s.saleDate': { $gte: from, $lt: to }, ...(tenantScope().storeId ? { '_s.storeId': tenantScope().storeId } : {}) } },
+            { $group: {
+                _id: '$product',
+                name: { $first: '$productName' },
+                qtySold: { $sum: '$quantity' },
+                revenue: { $sum: '$total' },
+                // cost snapshot at sale time; fallback 0
+                cost: { $sum: { $multiply: [{ $ifNull: ['$costPrice', 0] }, '$quantity'] } }
+            } },
+            { $lookup: { from: 'products', localField: '_id', foreignField: '_id', as: 'p' } },
+            { $addFields: {
+                currentCost: { $multiply: [ { $ifNull: [ { $arrayElemAt: ['$p.costPrice', 0] }, 0 ] }, '$qtySold' ] },
+                currentPrice: { $arrayElemAt: ['$p.price', 0] }
+            } },
+            { $addFields: { effCost: { $cond: [{ $gt: ['$cost', 0] }, '$cost', '$currentCost'] } } },
+            { $addFields: { profit: { $subtract: ['$revenue', '$effCost'] } } },
+            { $addFields: { marginPct: { $cond: [{ $gt: ['$revenue', 0] }, { $round: [{ $multiply: [{ $divide: ['$profit', '$revenue'] }, 100] }, 1] }, null] } } },
+            { $sort: { profit: -1 } },
+            { $project: { _id: 1, name: { $ifNull: ['$name', { $arrayElemAt: ['$p.name.ar', 0] }] }, qtySold: 1, revenue: { $round: ['$revenue', 2] }, cost: { $round: ['$effCost', 2] }, profit: { $round: ['$profit', 2] }, marginPct: 1, hasCost: { $gt: ['$effCost', 0] } } }
+        ]);
+        const totals = rows.reduce((acc, r) => {
+            acc.revenue += r.revenue || 0; acc.cost += r.cost || 0; acc.profit += r.profit || 0;
+            if (!r.hasCost) acc.unknownCost += 1;
+            return acc;
+        }, { revenue: 0, cost: 0, profit: 0, unknownCost: 0 });
+        totals.marginPct = totals.revenue > 0 ? Math.round((totals.profit / totals.revenue) * 1000) / 10 : null;
+        void lang;
+        return successResponse(res, { data: rows, totals, from, to });
+    } catch (err) { next(err); }
+};
+
+// Alert config CRUD are in alertConfigController — keep reports focused.
+
 module.exports = {
     getSummary,
     getSalesReport,
     getProductsReport,
     getCustomersReport,
-    getInventoryReport
+    getInventoryReport,
+    getKpi,
+    getProfitability
 };
