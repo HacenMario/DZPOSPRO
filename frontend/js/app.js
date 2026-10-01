@@ -129,7 +129,11 @@ const res = await fetch(`${API_BASE}/api/auth/login`, {
           window.Toast.success(window.t ? window.t('loginSuccess', 'تم تسجيل الدخول بنجاح') : 'Login successful');
         }
         // Brief delay so the toast can show before redirect
-        setTimeout(() => { window.location.href = 'dashboard.html'; }, 250);
+        // v3.2 — super-admin lands directly on the platform console
+        const role = payload.user && payload.user.role;
+        setTimeout(() => {
+          window.location.href = role === 'superadmin' ? 'dashboard.html#platform' : 'dashboard.html';
+        }, 250);
       } else {
         // Build a helpful message. If the backend returned validation errors,
         // surface the first field-level message instead of the generic "Validation failed".

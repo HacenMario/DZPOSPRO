@@ -26,6 +26,11 @@ async function getStoreDoc(storeId) {
     return doc;
 }
 
+// v3.2 — call whenever a store's status/plan changes so suspensions apply instantly
+function invalidateStoreCache(storeId) {
+    if (storeId != null) storeCache.delete(String(storeId));
+}
+
 const tenantMiddleware = (req, res, next) => {
     const user = req.user;
 
@@ -74,3 +79,4 @@ const tenantMiddleware = (req, res, next) => {
 };
 
 module.exports = tenantMiddleware;
+module.exports.invalidateStoreCache = invalidateStoreCache;

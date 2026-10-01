@@ -1,9 +1,11 @@
 // backend/controllers/userController.js
 const User = require('../models/User');
+const Store = require('../models/Store');
 const { getTranslation } = require('../config/i18n');
 const logger = require('../utils/logger');
 const { successResponse, createdResponse, errorResponse, paginatedResponse } = require('../utils/response');
 const { parsePagination } = require('../utils/pagination');
+const { isSuperContext } = require('../services/tenantContext');
 
 // GET /api/users?page&limit
 const getUsers = async (req, res, next) => {
@@ -17,9 +19,21 @@ const getUsers = async (req, res, next) => {
         if (req.query.role) filter.role = req.query.role;
 
         const [data, total] = await Promise.all([
-            User.find(filter).select('-password').sort({ createdAt: -1 }).skip(skip).limit(limit),
+            User.find(filter).select('-password').sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
             User.countDocuments(filter)
         ]);
+        // v3.2 — platform view: annotate every account with its store name
+        if (isSuperContext()) {
+            const storeIds = [...new Set(data.map((u) => u.storeId && String(u.storeId)).filter(Boolean))];
+            if (storeIds.length) {
+                const stores = await Store.find({ _id: { $in: storeIds } }).select('name plan').lean();
+                const map = Object.fromEntries(stores.map((s) => [String(s._id), s]));
+                data.forEach((u) => {
+                    const s = map[String(u.storeId)];
+                    if (s) { u._storeName = s.name; u._storePlan = s.plan; }
+                });
+            }
+        }
         return paginatedResponse(res, { data, total, page, limit });
     } catch (err) {
         logger.error('getUsers error:', err.message);

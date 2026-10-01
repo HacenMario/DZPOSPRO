@@ -103,6 +103,36 @@ async function main() {
         logger.info(`Super-admin ${superEmail} already exists.`);
     }
 
+    // 3b) GUARANTEE the default store keeps at least one active admin.
+    // If the only admin was promoted to superadmin (or the DB was fresh),
+    // create/restore a store admin so the store is never orphaned.
+    const activeAdmins = await User.countDocuments({ storeId, role: 'admin', isActive: { $ne: false } });
+    if (activeAdmins === 0) {
+        const crypto = require('crypto');
+        const adminEmail = (process.env.SEED_STORE_ADMIN_EMAIL || ('admin.' + String(storeId).slice(-6) + '@dzpos.pro')).toLowerCase();
+        let storeAdmin = await User.findOne({ email: adminEmail });
+        let genPass = null;
+        if (!storeAdmin) {
+            genPass = process.env.SEED_STORE_ADMIN_PASSWORD || ('Dz-' + crypto.randomBytes(4).toString('hex') + '!');
+            storeAdmin = await User.create({
+                name: process.env.SEED_STORE_ADMIN_NAME || 'Store Admin',
+                email: adminEmail,
+                password: genPass,
+                role: 'admin',
+                storeId,
+                isActive: true
+            });
+        } else {
+            storeAdmin.role = 'admin';
+            storeAdmin.storeId = storeId;
+            storeAdmin.isActive = true;
+            await storeAdmin.save();
+        }
+        logger.info('=========================================================');
+        logger.info(`STORE ADMIN ensured for "${store.name}" — email: ${adminEmail}` + (genPass ? `  password: ${genPass}` : ' (existing password kept)'));
+        logger.info('=========================================================');
+    }
+
     // 4) index fixes (drop obsolete global uniques, add per-store compounds)
     for (const fix of INDEX_FIXES) {
         try {

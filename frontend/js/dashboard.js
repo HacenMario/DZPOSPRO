@@ -256,8 +256,13 @@ async function loadPage(page) {
     document.querySelectorAll('.sidebar-nav .nav-item').forEach(link => {
       const page = link.dataset.page;
       let hidden = false;
-      if (page === 'platform') hidden = role !== 'superadmin';
-      if (['audit', 'ai'].includes(page)) hidden = !['admin', 'manager'].includes(role);
+      if (role === 'superadmin') {
+        // v3.2 — the platform owner has access to EVERYTHING
+        hidden = false;
+      } else {
+        if (page === 'platform') hidden = true;
+        if (['audit', 'ai'].includes(page)) hidden = !['admin', 'manager'].includes(role);
+      }
       link.style.display = hidden ? 'none' : '';
     });
   }
@@ -444,6 +449,34 @@ async function loadPage(page) {
 
     // Initial render
     initTableCardLabels();
-    loadPage('dashboard');
+    // v3.2 — honour deep links (#page) and land the super-admin on the platform console
+    const initialPage = (location.hash || '').replace('#', '');
+    if (currentUser && currentUser.role === 'superadmin' && !initialPage) {
+      loadPage('platform');
+    } else {
+      loadPage(MODULE_MAP[initialPage] ? initialPage : 'dashboard');
+    }
+
+    // v3.2 — impersonation: floating "back to platform" chip while working inside a store
+    try {
+      const pfSession = localStorage.getItem('pf_super_session');
+      if (pfSession) {
+        const back = document.createElement('button');
+        back.type = 'button';
+        back.className = 'btn btn-secondary';
+        back.textContent = '⬅ ' + (window.t ? window.t('pfBackToPlatform', 'العودة إلى المنصة') : 'Back to platform');
+        back.style.cssText = 'position:fixed;bottom:18px;inset-inline-end:18px;z-index:9998;box-shadow:0 10px 28px rgba(0,0,0,.28);border-radius:999px;padding:10px 18px;';
+        back.addEventListener('click', () => {
+          try {
+            const s = JSON.parse(pfSession);
+            if (s.token) localStorage.setItem('token', s.token);
+            if (s.user) localStorage.setItem('user', s.user);
+          } catch (_) {}
+          localStorage.removeItem('pf_super_session');
+          window.location.href = 'dashboard.html#platform';
+        });
+        document.body.appendChild(back);
+      }
+    } catch (_) {}
   });
 })();

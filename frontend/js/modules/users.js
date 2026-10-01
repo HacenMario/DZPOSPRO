@@ -56,6 +56,7 @@ function roleBadge(role) {
   if (role === 'admin')   return '<span class="badge badge-danger">'  + t('roleAdmin', 'Admin')   + '</span>';
   if (role === 'manager') return '<span class="badge badge-warning">' + t('roleManager', 'Manager') + '</span>';
   if (role === 'cashier') return '<span class="badge badge-info">'    + t('roleCashier', 'Cashier') + '</span>';
+  if (role === 'superadmin') return '<span class="badge badge-super">' + t('roleSuper', 'Super Admin') + '</span>';
   return '<span class="badge badge-muted">' + escapeHtml(role || '—') + '</span>';
 }
 
@@ -121,6 +122,7 @@ function renderToolbar() {
           <option value="admin"   ${state.role === 'admin' ? 'selected' : ''}>${t('roleAdmin', 'Admin')}</option>
           <option value="manager" ${state.role === 'manager' ? 'selected' : ''}>${t('roleManager', 'Manager')}</option>
           <option value="cashier" ${state.role === 'cashier' ? 'selected' : ''}>${t('roleCashier', 'Cashier')}</option>
+          <option value="superadmin" ${state.role === 'superadmin' ? 'selected' : ''}>${t('roleSuper', 'Super Admin')}</option>
         </select>
         <select class="select" id="userStatusFilter" aria-label="${t('status', 'Status')}">
           <option value=""        ${state.status === '' ? 'selected' : ''}>${t('allStatuses', 'All statuses')}</option>
@@ -154,6 +156,7 @@ function renderTable() {
   }
 
   const meId = currentUserId();
+  const platformView = state.items.some((u) => u._storeName);
   const rows = state.items.map((u, i) => {
     const idx = (state.page - 1) * state.limit + i + 1;
     const isSelf = u._id === meId;
@@ -163,6 +166,7 @@ function renderTable() {
         <td class="cell-muted">${idx}</td>
         <td class="cell-strong">${escapeHtml(u.name || '—')}${isSelf ? ' <span class="badge badge-info" style="margin-inline-start:0.4rem;">' + t('you', 'You') + '</span>' : ''}</td>
         <td class="cell-muted">${escapeHtml(u.email || '—')}</td>
+        ${platformView ? `<td>${u._storeName ? '<span class="badge badge-store" title="' + escapeHtml(u._storePlan || '') + '">🏪 ' + escapeHtml(u._storeName) + '</span>' : '<span class="cell-muted">—</span>'}</td>` : ''}
         <td>${roleBadge(u.role)}</td>
         <td>${statusBadge(u.isActive)}</td>
         <td class="cell-muted">${escapeHtml(fmtDate(u.createdAt))}</td>
@@ -203,6 +207,7 @@ function renderTable() {
             <th>#</th>
             <th>${t('name', 'Name')}</th>
             <th>${t('email', 'Email')}</th>
+            ${platformView ? `<th>${t('storeName', 'Store')}</th>` : ''}
             <th>${t('role', 'Role')}</th>
             <th>${t('status', 'Status')}</th>
             <th>${t('created', 'Created')}</th>

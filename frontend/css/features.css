@@ -162,3 +162,70 @@
 [data-theme="dark"] .chip { background: #1f2937; border-color: #374151; color: #e5e7eb; }
 [data-theme="dark"] .ai-chip.link { background: #1f2937; color: #e5e7eb; border-color: #374151; }
 [data-theme="dark"] .notif-badge { box-shadow: 0 0 0 2px #1f2937; }
+
+/* ============================================================
+ * v3.2 — Platform console (super-admin)
+ * ============================================================ */
+.badge-super { background: linear-gradient(135deg, #7c3aed, #a855f7); color: #fff; }
+.badge-store { background: #eef2ff; color: #4338ca; border: 1px solid #c7d2fe; }
+.pf-warn { border-inline-start: 4px solid #f59e0b; background: #fffbeb; padding: 12px 16px; margin-bottom: 12px; border-radius: 10px; }
+[data-theme="dark"] .pf-warn { background: #422006; color: #fde68a; }
+
+.pf-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+.pf-panel { padding: 14px 16px; }
+.pf-panel-head { padding-bottom: 8px; margin-bottom: 6px; border-bottom: 1px solid rgba(128,128,128,.18); }
+.pf-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px dashed rgba(128,128,128,.15); }
+.pf-row:last-child { border-bottom: none; }
+
+.link-btn { background: none; border: none; color: var(--primary, #2563eb); cursor: pointer; padding: 0; font: inherit; text-decoration: underline; }
+
+/* ----- modal system ----- */
+.pf-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.55); backdrop-filter: blur(2px); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 16px; animation: pfFade .18s ease; }
+@keyframes pfFade { from { opacity: 0; } to { opacity: 1; } }
+.pf-modal { background: #fff; color: #111827; border-radius: 16px; width: 100%; max-width: 560px; max-height: 88vh; display: flex; flex-direction: column; box-shadow: 0 24px 60px rgba(0,0,0,.28); animation: pfPop .2s cubic-bezier(.2,.9,.3,1.2); }
+.pf-modal.pf-wide { max-width: 860px; }
+@keyframes pfPop { from { transform: translateY(14px) scale(.97); opacity: 0; } to { transform: none; opacity: 1; } }
+.pf-modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 18px 20px 12px; border-bottom: 1px solid rgba(128,128,128,.16); }
+.pf-modal-title { font-size: 17px; font-weight: 800; }
+.pf-modal-sub { font-size: 12.5px; color: #6b7280; margin-top: 3px; }
+.pf-close { border: none; background: #f3f4f6; width: 32px; height: 32px; border-radius: 9px; cursor: pointer; font-size: 14px; flex-shrink: 0; }
+.pf-close:hover { background: #e5e7eb; }
+.pf-modal-body { padding: 16px 20px; overflow-y: auto; }
+.pf-modal-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 12px 20px 16px; border-top: 1px solid rgba(128,128,128,.16); }
+
+.pf-section-title { font-weight: 800; font-size: 13px; color: #374151; margin: 14px 0 8px; padding-inline-start: 8px; border-inline-start: 3px solid #7c3aed; }
+.pf-modal-body > .pf-section-title:first-child { margin-top: 0; }
+.pf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
+.pf-span2 { grid-column: span 2; }
+.pf-label { display: block; font-size: 12px; font-weight: 600; color: #4b5563; margin-bottom: 4px; }
+.pf-quick-row { display: flex; gap: 8px; margin-top: 8px; }
+.pf-pass { position: relative; }
+.pf-pass .input { padding-inline-end: 40px; }
+.pf-pass-toggle { position: absolute; inset-inline-end: 6px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 15px; }
+
+.pf-add-user { margin-top: 16px; padding-top: 10px; border-top: 1px dashed rgba(128,128,128,.25); }
+.pf-add-user .pf-grid { grid-template-columns: 1fr 1fr; }
+
+[data-theme="dark"] .pf-modal { background: #111827; color: #f3f4f6; }
+[data-theme="dark"] .pf-modal-sub, [data-theme="dark"] .pf-label { color: #9ca3af; }
+[data-theme="dark"] .pf-section-title { color: #e5e7eb; }
+[data-theme="dark"] .pf-close { background: #1f2937; color: #e5e7eb; }
+[data-theme="dark"] .pf-close:hover { background: #374151; }
+[data-theme="dark"] .pf-modal-head, [data-theme="dark"] .pf-modal-foot { border-color: #374151; }
+[data-theme="dark"] .badge-store { background: #312e81; color: #c7d2fe; border-color: #4338ca; }
+
+/* ----- responsive: tablets ----- */
+@media (max-width: 900px) {
+  .pf-two-col { grid-template-columns: 1fr; }
+}
+/* ----- responsive: phones ----- */
+@media (max-width: 640px) {
+  .pf-overlay { padding: 0; align-items: flex-end; }
+  .pf-modal, .pf-modal.pf-wide { max-width: 100%; max-height: 94vh; border-radius: 18px 18px 0 0; }
+  .pf-grid { grid-template-columns: 1fr; }
+  .pf-span2 { grid-column: span 1; }
+  .pf-modal-foot { flex-direction: column-reverse; }
+  .pf-modal-foot .btn { width: 100%; }
+  .row-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+  .row-actions .btn { padding: 4px 8px; font-size: 12px; }
+}
