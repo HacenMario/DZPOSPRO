@@ -4,7 +4,7 @@
 //   2. Creates default Settings document (if none exists).
 //   3. Adds a few sample categories/products/customers ONLY when the DB is empty.
 // Run: npm run seed   (or: node scripts/seed.js)
-require('dotenv').config();
+require('../utils/loadEnv')();
 const mongoose = require('mongoose');
 const logger = require('../utils/logger');
 const { runWithTenant } = require('../services/tenantContext');

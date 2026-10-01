@@ -1,6 +1,12 @@
 # 🚀 DZ POS PRO v3 — دليل الترقية والميزات الجديدة
 # Guide de mise à niveau — Upgrade Guide
 
+## ⚡ v3.1 — إصلاحات أهم الأخطاء
+- **إصلاح "Missing script: migrate-saas"**: أصبح `package.json` في الجذر كاملاً (كل الاعتماديات + كل الأوامر). شغّل كل شيء من **مجلد الجذر** مباشرة.
+- **إصلاح "Route introuvable"**: الواجهة كانت تُجبر كل الطلبات على الباك-إند القديم. الآن تكشف وجهتها تلقائياً: على Vercel تستدعي `https://dzpospro-production.up.railway.app`، ومحلياً/من Railway تستدعي نفس المصدر.
+- **قراءة `.env` بذكاء**: يقرأ `backend/.env` ثم `.env` في الجذر — الأوامر تعمل من أي مكان.
+- **فحص مسبق عند التشغيل**: إن نقصت اعتمادية تظهر رسالة واضحة بالإنجليزية بدل انهيار غامض.
+
 ## ما الجديد في v3؟ / What's new
 
 ### 🏗️ التأسيس: SaaS + أمان
@@ -32,30 +38,39 @@
 
 ---
 
-## خطوات الترقية / Upgrade steps
+## خطوات الترقية / Upgrade steps — نشر منقسم (Vercel + Railway)
 
-### 1) Backend (Railway)
-```bash
-cd backend
-npm install                # يعتمدات جديدة: node-cron, web-push, axios
-```
-أضف متغيرات البيئة (اختياري — انظر .env.example):
-- `GEMINI_API_KEY` — مفتاح Gemini المجاني (أو أضفه من الواجهة: الإعدادات ← الذكاء الاصطناعي)
-- `BACKUP_CRON` — جدولة النسخ الاحتياطي (افتراضي `0 3 * * 0` = الأحد 03:00)
-- `SEED_SUPERADMIN_EMAIL` / `SEED_SUPERADMIN_PASSWORD` — حساب المنصة الأعلى
+> طوبولوجيا مشروعك: الواجهة على **https://dzpospro.vercel.app** والباك-إند على **https://dzpospro-production.up.railway.app** — النسخة v3.1 تدعم هذا النمط تلقائياً.
 
-### 2) هجرة البيانات لمخطط SaaS (مرة واحدة فقط)
-```bash
+### 1) Backend على Railway — https://dzpospro-production.up.railway.app
+انشر نسخة v3.1 على Railway (ارفع المجلد/المستودع كاملاً — الجذر يحتوي `nixpacks.toml` و`package.json` كاملَين، فالتثبيت والتشغيل تلقائيان).
+متغيرات البيئة على Railway:
+- `MONGO_URI` و `JWT_SECRET` — موجودان مسبقاً من نشرتك السابقة، أَبقهما كما هما
+- اختياري: `GEMINI_API_KEY` (أو أضفه لاحقاً من الواجهة)، `BACKUP_CRON` (افتراضي `0 3 * * 0` = الأحد 03:00)، `SEED_SUPERADMIN_EMAIL` / `SEED_SUPERADMIN_PASSWORD`
+
+بعد النشر تحقّق: افتح `https://dzpospro-production.up.railway.app/api/ai/status` — يجب أن ترى JSON مثل `{"success":true,...}` وليس "Route introuvable".
+
+### 2) هجرة البيانات لمخطط SaaS (مرة واحدة فقط — على قاعدة بيانات الإنتاج)
+الطريقة الأسهل — من جهازك (PowerShell):
+```powershell
+cd C:\path\to\DZPOSPRO
+npm install                                        # مرة واحدة، من الجذر
+$env:MONGO_URI="mongodb://<رابط-قاعدة-بيانات-الإنتاج>"
 npm run migrate-saas
-# أو: node scripts/migrate_saas.js
 ```
+أو من Railway: افتح خدمة الباك-إند ← Shell ← نفّذ `npm run migrate-saas`
+
 هذا السكربت:
-- ينشئ المتجر الافتراضي من إعداداتك الحالية ويختم كل بياناتك بمعرّفه
-- ينشئ حساب **super-admin** (يطبع كلمة المرور مرة واحدة إن لم تحددها)
+- ينشئ المتجر الافتراضي ويختم كل بياناتك الحالية بمعرّفه
+- **ينشئ/يرقّي حساب super-admin**: افتراضياً `super@dzpos.pro`. لتخصيصه اضبط `SEED_SUPERADMIN_EMAIL` (و`SEED_SUPERADMIN_PASSWORD`، وإلا ستُطبع كلمة مرور مولّدة **مرة واحدة** في نتيجة الأمر — انسخها فوراً)
 - يحوّل الفهارس الفريدة إلى فريدة لكل مخزن (باركود، رقم فاتورة، هاتف عميل…)
 
-### 3) Frontend (Vercel)
-انشر مجلد `frontend` كما هو — لا خطوات إضافية. الميزات الجديدة تظهر تلقائياً.
+### 3) Frontend على Vercel — https://dzpospro.vercel.app
+انشر مجلد `frontend` الجديد (استبدال كامل للنشر القديم). **لا إعدادات مطلوبة**: v3.1 تكتشف أن الصفحة مستضافة على vercel.app فتستدعي Railway تلقائياً.
+(لتحكم يدوي في أي بيئة: `localStorage.setItem('dzpos_api_base', 'https://dzpospro-production.up.railway.app')`)
+
+### 4) إنشاء حساب مخزن جديد (SaaS)
+من صفحة `register.html` — تنشئ متجراً بتجربة 14 يوماً وتدخّلك تلقائياً. حساب المنصة الأعلى (super-admin) يُنشأ في الخطوة 2، ولوحة إدارته: `dashboard.html#platform`.
 
 ---
 
@@ -93,3 +108,13 @@ frontend/
 - **الفوترة الرسمية الجزائرية** (Arrêté + N.B + timbre) لم تُمسّ إطلاقاً
 - **كلمات المرور/المفاتيح** لا تُسجل في سجل التدقيق (تُستبدل بـ [redacted])
 - **النسخ الاحتياطي** على Railway مؤقت المجلد — فعّل `BACKUP_UPLOAD_URL` أو حمّل النسخ يدوياً دورياً
+
+## 🔧 استكشاف الأخطاء وإصلاحها (v3.1)
+
+| الخطأ | السبب | الحل |
+|---|---|---|
+| `Missing script: "migrate-saas"` | كان `package.json` في الجذر نسخة قديمة (v1) بلا أوامر v3 | استخدم نسخة v3.1 (الجذر كامل) ثم أعد `npm install` من الجذر — الأمر `npm run migrate-saas` سيعمل |
+| `Route introuvable` على الميزات الجديدة | الواجهة تستدعي باك-إند **قديم** لا يحتوي مسارات v3 (`/api/ai`, `/api/audit`, `/api/stores`…) | انشر باك-إند v3.1 على Railway + انشر واجهة v3.1 على Vercel. للتحقق: `https://dzpospro-production.up.railway.app/api/ai/status` يجب أن يعيد JSON |
+| `DZ POS PRO — missing dependencies: …` عند التشغيل | لم تُثبّت الاعتماديات بعد تحديث النسخة | `npm install` من الجذر (أو من backend) ثم أعد التشغيل |
+| السيرفر يشتغل محلياً بلا قاعدة بيانات | `MONGO_URI` غير مضبوط | أنشئ ملف `.env` في الجذر أو في backend بالسطر `MONGO_URI=…` — v3.1 يقرأ المكانين |
+| إشعارات الهاتف لا تصل | لم يُثبَّت التطبيق أو رُفض الإذن | ثبّت "إضافة إلى الشاشة الرئيسية" أولاً، ثم فعّل الإشعارات من الإعدادات ← 🤖 (iOS يتطلب iOS 16.4+) |

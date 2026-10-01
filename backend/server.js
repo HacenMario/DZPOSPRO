@@ -1,7 +1,21 @@
 // backend/server.js
 // DZ POS PRO — Express + Mongoose API server.
 // Serves the ../frontend SPA statically + JSON API under /api.
-require('dotenv').config();
+// v3.1 — robust env loading (backend/.env wins, then root .env fills the rest)
+require('./utils/loadEnv')();
+
+// v3.1 pre-flight — fail fast with a clear message instead of a cryptic crash
+const REQUIRED_DEPS = ['express', 'mongoose', 'jsonwebtoken', 'bcryptjs', 'socket.io', 'node-cron', 'web-push', 'axios'];
+const missingDeps = REQUIRED_DEPS.filter((m) => { try { require.resolve(m); return false; } catch (e) { return true; } });
+if (missingDeps.length) {
+    console.error('');
+    console.error('================================================================');
+    console.error('  DZ POS PRO — missing dependencies: ' + missingDeps.join(', '));
+    console.error('  Fix: run "npm install" in the project root (or in backend/).');
+    console.error('================================================================');
+    console.error('');
+    process.exit(1);
+}
 
 const express = require('express');
 const cors = require('cors');

@@ -9,6 +9,7 @@ export async function renderPlatformPage(ctx) {
   if (!content) return;
   const t = (k, fb) => (typeof window.t === 'function' ? window.t(k, fb) : fb);
   const lang = (typeof window.currentLang !== 'undefined' && window.currentLang) || 'ar';
+  const apiBase = (ctx && ctx.apiBase) || window.DZPOS_API_BASE || '';
 
   content.innerHTML = `
     <div class="page-subtitle">${t('platformSubtitle', 'لوحة المنصة: إدارة المخازن، الاشتراكات، والنسخ الاحتياطي الأسبوعي.')}</div>
@@ -190,7 +191,7 @@ export async function renderPlatformPage(ctx) {
               <td><span class="badge badge-info">${b.trigger === 'auto-weekly' ? t('autoWeekly', 'أسبوعية تلقائية') : t('manual', 'يدوية')}</span></td>
               <td>${b.docsCount || '—'}</td>
               <td class="row-actions">
-                <a class="btn btn-sm btn-secondary" href="https://dzpospro-production.up.railway.app/api/backups/${encodeURIComponent(b.filename)}/download" target="_blank" rel="noopener">${t('download', 'تحميل')}</a>
+                <a class="btn btn-sm btn-secondary" href="${apiBase}/api/backups/${encodeURIComponent(b.filename)}/download" target="_blank" rel="noopener">${t('download', 'تحميل')}</a>
                 <button class="btn btn-sm btn-danger bk-restore" data-file="${esc(b.filename)}">⏪ ${t('restore', 'استعادة')}</button>
               </td>
             </tr>`).join('') : `<tr><td colspan="6" class="empty-state">${t('noBackups', 'لا نسخ بعد — أنشئ أول نسخة الآن')}</td></tr>`}

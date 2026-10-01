@@ -14,8 +14,15 @@
 (function (global) {
   'use strict';
 
-  // ===== استخدم API_BASE من config.js =====
-  const API_BASE = 'https://dzpospro-production.up.railway.app';
+  // ===== v3.1: smart API base (mirrors config.js) =====
+  const API_BASE = (function () {
+    var o = '';
+    try { o = localStorage.getItem('dzpos_api_base') || window.DZPOS_API_BASE || ''; } catch (e) {}
+    if (o) return String(o).replace(/\/+$/, '');
+    if (location.protocol === 'file:') return 'https://dzpospro-production.up.railway.app';
+    if (/(^|\.)vercel\.app$/i.test(location.hostname || '')) return 'https://dzpospro-production.up.railway.app';
+    return '';
+  })();
 
   function getToken() {
     try { return localStorage.getItem('token'); } catch { return null; }

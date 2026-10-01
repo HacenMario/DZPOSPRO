@@ -13,7 +13,7 @@
 //   5. Ensures default alert configs for the store.
 //
 // Run AFTER deploying v3 code once:  node scripts/migrate_saas.js
-require('dotenv').config();
+require('../utils/loadEnv')();
 const mongoose = require('mongoose');
 const logger = require('../utils/logger');
 const { runWithTenant } = require('../services/tenantContext');

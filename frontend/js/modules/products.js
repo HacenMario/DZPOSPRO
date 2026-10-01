@@ -245,7 +245,7 @@ async function fetchCategories() {
     const token = localStorage.getItem('token');
     console.log('🔵 Fetching categories with token:', token ? 'Yes' : 'No');
     
-    const response = await fetch('https://dzpospro-production.up.railway.app/api/categories?limit=1000', {
+    const response = await fetch(API_BASE + '/api/categories?limit=1000', {
       method: 'GET',
       headers: {
         'Authorization': 'Bearer ' + token,
