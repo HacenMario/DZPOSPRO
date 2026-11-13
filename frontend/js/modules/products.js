@@ -17,7 +17,16 @@
 
 const apiFetch = window.apiFetch;
 const t = (k, fb) => (typeof window.t === 'function' ? window.t(k, fb) : (fb || k));
-import API_BASE from '../config.js';
+// v4.2.1b — LIVE API base (js/config.js resolves + heals).
+// The old `import API_BASE from '../config.js'` broke this whole page with
+// "Failed to load module — does not provide an export named 'default'":
+// config.js is a classic-script IIFE, not an ES module, and every other
+// page module reads the base at call time like below.
+function liveBase() {
+  return (typeof window.dzposApiBase === 'function'
+    ? window.dzposApiBase()
+    : (window.DZPOS_API_BASE || '')).replace(/\/+$/, '');
+}
 
 // CSV round-trip column order — MUST stay in sync with backend exportProducts/importProducts
 const CSV_HEADERS = ['id', 'name', 'description', 'barcode', 'sku', 'category', 'price', 'costPrice', 'stock', 'minStock', 'unit', 'tax', 'timbre', 'status'];
@@ -242,64 +251,29 @@ function renderTable() {
 /* ---------- Fetch ---------- */
 async function fetchCategories() {
   try {
-    const token = localStorage.getItem('token');
-    console.log('🔵 Fetching categories with token:', token ? 'Yes' : 'No');
-    
-    const response = await fetch(API_BASE + '/api/categories?limit=1000', {
-      method: 'GET',
-      headers: {
-        'Authorization': 'Bearer ' + token,
-        'Content-Type': 'application/json'
-      }
-    });
-    
-    console.log('🔵 Response status:', response.status);
-    const data = await response.json();
-    console.log('📦 Full API response:', JSON.stringify(data, null, 2));
-    
+    // v4.2.1b — apiFetch carries auth + app-language headers + the live base.
+    const data = await apiFetch.get('/api/categories?limit=1000');
+
     let categories = [];
-    
-    // ✅ استخراج المصفوفة من المسار الصحيح
+
     if (data && data.success) {
-      // الحالة الصحيحة: data.data.categories هي المصفوفة
       if (data.data && data.data.categories && Array.isArray(data.data.categories)) {
         categories = data.data.categories;
-        console.log('📦 Extracted from data.data.categories');
-      }
-      // الحالة 2: data.data هي المصفوفة مباشرة
-      else if (data.data && Array.isArray(data.data)) {
+      } else if (data.data && Array.isArray(data.data)) {
         categories = data.data;
-        console.log('📦 Extracted from data.data');
-      }
-      // الحالة 3: data.categories هي المصفوفة
-      else if (data.categories && Array.isArray(data.categories)) {
+      } else if (data.categories && Array.isArray(data.categories)) {
         categories = data.categories;
-        console.log('📦 Extracted from data.categories');
-      }
-      // الحالة 4: data.data.data هي المصفوفة
-      else if (data.data && data.data.data && Array.isArray(data.data.data)) {
+      } else if (data.data && data.data.data && Array.isArray(data.data.data)) {
         categories = data.data.data;
-        console.log('📦 Extracted from data.data.data');
       }
     } else if (data && Array.isArray(data)) {
       categories = data;
-      console.log('📦 Extracted from data (array)');
     } else if (data && data.data && Array.isArray(data.data)) {
       categories = data.data;
-      console.log('📦 Extracted from data.data');
     }
-    
+
     state.categories = categories;
-    console.log('✅ Categories loaded:', state.categories.length);
-    
-    // عرض تفاصيل الفئات
-    if (categories.length > 0) {
-      console.log('📦 First category:', categories[0]);
-      console.log('📦 Category names:', categories.map(c => c.name?.ar || c.name || 'unnamed'));
-    } else {
-      console.warn('⚠️ No categories found in response');
-    }
-  } catch (e) { 
+  } catch (e) {
     console.error('[products] fetchCategories error:', e);
     state.categories = [];
   }
@@ -745,7 +719,18 @@ async function exportProductsCsv() {
   setBusy(true);
   try {
     const token = localStorage.getItem('token');
-    const res = await fetch(API_BASE + '/api/products/export', { headers: { 'Authorization': 'Bearer ' + (token || '') } });
+    // v4.2.1b — live base (was the removed ESM import); raw fetch kept for the blob download
+    const res = await fetch(liveBase() + '/api/products/export', {
+      headers: (function () {
+        var h = { 'Authorization': 'Bearer ' + (token || '') };
+        var lang = 'ar';
+        try { lang = (window.currentLang || localStorage.getItem('lang') || 'ar').slice(0, 2); } catch (_) {}
+        h['Accept-Language'] = lang;
+        h['x-dzpos-lang'] = lang;
+        return h;
+      })(),
+      cache: 'no-store'
+    });
     if (!res.ok) {
       let msg = 'HTTP ' + res.status;
       try { const j = await res.json(); if (j && j.message) msg = j.message; } catch (_) {}

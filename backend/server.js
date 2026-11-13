@@ -78,7 +78,14 @@ const corsOptions = {
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    // v4.2.1b — Accept-Language + x-dzpos-lang MUST be listed: the frontend
+    // v4.2 sends the app language on EVERY request. Without them the browser
+    // preflight rejects cross-origin calls (Vercel → Railway) with
+    // "Failed to fetch" → "تعذّر الوصول إلى الخادم" — while same-origin
+    // (Railway serving the frontend itself) never runs CORS at all and
+    // kept working. Accept-Language is CORS-safelisted but x-dzpos-lang
+    // (custom) required explicit approval.
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Accept-Language', 'x-dzpos-lang'],
     exposedHeaders: ['Authorization']
 };
 

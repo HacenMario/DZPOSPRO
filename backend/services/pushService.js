@@ -5,6 +5,10 @@
 // via env (VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY / VAPID_SUBJECT).
 const webpush = require('web-push');
 const PlatformSetting = require('../models/PlatformSetting');
+// v4.2.1b — REQUIRED: the stale-subscription cleanup (404/410) below calls
+// PushSubscription.deleteOne; without this import it threw a ReferenceError
+// that bubbled up as HTTP 500 "Server error" on POST /api/push/test.
+const PushSubscription = require('../models/PushSubscription');
 const logger = require('../utils/logger');
 
 let configured = false;

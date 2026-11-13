@@ -282,7 +282,7 @@
       dotEl.addEventListener('click', () => probeServer());
     }
     const verEl = document.querySelector('[data-i18n="version"]');
-    if (verEl) verEl.textContent = 'v4.2.1';
+    if (verEl) verEl.textContent = 'v4.2.2';
   });
 
   // Expose setTheme globally for any external caller
