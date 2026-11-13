@@ -745,9 +745,11 @@ async function loadSettings() {
 }
 
 async function loadCurrentUser() {
-  // Prefer localStorage (already stored at login), refresh from /api/auth/me
+  // v4.4 — the platform owner (superadmin) is independent of any store and
+  // controls EVERYTHING: settings are fully editable for him too.
+  const canEdit = (u) => !!u && ['admin', 'manager', 'superadmin'].includes(u.role);
   state.user = getCurrentUser();
-  state.isAdmin = state.user && (state.user.role === 'admin' || state.user.role === 'manager');
+  state.isAdmin = canEdit(state.user);
   try {
     const r = await apiFetch.get('/api/auth/me');
     if (r && r.success && (r.data || r.user)) {
@@ -755,7 +757,7 @@ async function loadCurrentUser() {
       const u = (r.data && r.data.user) ? r.data.user : (r.data || r.user);
       state.user = u;
       try { localStorage.setItem('user', JSON.stringify(state.user)); } catch (_) {}
-      state.isAdmin = state.user && (state.user.role === 'admin' || state.user.role === 'manager');
+      state.isAdmin = canEdit(state.user);
     }
   } catch (err) {
     // /me might fail; rely on localStorage user

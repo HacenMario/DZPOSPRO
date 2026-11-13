@@ -282,7 +282,11 @@
       dotEl.addEventListener('click', () => probeServer());
     }
     const verEl = document.querySelector('[data-i18n="version"]');
-    if (verEl) verEl.textContent = (window.DZPOS_VERSION || '4.3.1') ? 'v' + window.DZPOS_VERSION : 'v4.3.1';
+    if (verEl) {
+      // v4.4 — i18n composes the label + live DZPOS_VERSION (see i18n.js);
+      // this immediate pass covers the moment before the language JSON lands.
+      verEl.textContent = 'v' + (window.DZPOS_VERSION || '4.4.0');
+    }
   });
 
   // Expose setTheme globally for any external caller

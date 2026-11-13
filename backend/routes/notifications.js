@@ -9,6 +9,8 @@ router.use(authMiddleware, tenantMiddleware);
 router.get('/', controller.list);
 router.get('/unread-count', controller.unreadCount);
 router.post('/mark-read', controller.markRead);
+// v4.4 — clear ALL visible notifications (must be registered BEFORE /:id)
+router.delete('/', controller.removeAll);
 router.delete('/:id', controller.remove);
 
 module.exports = router;

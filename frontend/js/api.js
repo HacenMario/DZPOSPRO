@@ -225,6 +225,62 @@
   apiFetch.delete = (url, o)    => apiFetch(url, Object.assign({ method: 'DELETE' }, o || {}));
 
   /**
+   * v4.4 — Authenticated FILE DOWNLOAD.
+   * A plain <a href> cannot carry the Authorization header, so protected
+   * endpoints (e.g. GET /api/backups/:file/download) answered 401
+   * "Non autorisé". This helper fetches the file with the same auth/lang
+   * headers as apiFetch, wraps the body in a Blob and saves it locally.
+   * @param {string} url          Relative or absolute URL of the file
+   * @param {string} fallbackName Name used when the server sends no
+   *                              Content-Disposition filename
+   */
+  apiFetch.download = async function (url, fallbackName) {
+    const token = getToken();
+    const headers = langHeaders();
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    const fullUrl = url.startsWith('http') ? url : `${API_BASE()}${url}`;
+    const res = await rawFetch(fullUrl, { headers, cache: 'no-store' });
+
+    if (res.status === 401) {
+      clearSession();
+      if (typeof window.Toast === 'object' && window.Toast.warning) {
+        window.Toast.warning(t('sessionExpired', 'انتهت الجلسة. يرجى إعادة تسجيل الدخول.'));
+      }
+      redirectToLogin();
+      const err = new Error('Unauthorized'); err.status = 401; throw err;
+    }
+    if (!res.ok) {
+      let message = 'HTTP ' + res.status;
+      try {
+        const j = await res.json();
+        if (j && (j.message || j.error)) message = j.message || j.error;
+      } catch (_) { /* non-JSON error body */ }
+      if (typeof window.Toast === 'object' && window.Toast.error) {
+        window.Toast.error(message);
+      }
+      const err = new Error(message); err.status = res.status; throw err;
+    }
+
+    const blob = await res.blob();
+    // Content-Disposition: attachment; filename="..." (or filename*=UTF-8'')
+    let name = fallbackName || 'download';
+    const cd = res.headers.get('content-disposition') || '';
+    let m = /filename\*=UTF-8''([^;]+)/i.exec(cd);
+    if (m) { try { name = decodeURIComponent(m[1]); } catch (_) {} }
+    else { m = /filename="?([^";]+)"?/i.exec(cd); if (m) name = m[1]; }
+
+    const objUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objUrl;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(objUrl), 4000);
+    return name;
+  };
+
+  /**
    * Resolve a backend asset path (e.g. "/uploads/1698-123.jpg") to an
    * absolute URL. The backend stores RELATIVE paths, so when the frontend
    * is served from a different origin (Vercel) a bare <img src="/uploads/…">

@@ -1,6 +1,6 @@
 {
     "name": "dzpospro",
-    "version": "4.3.1",
+    "version": "4.4.0",
     "description": "DZ POS PRO v4.0 — Multi-tenant SaaS POS (Express + MongoDB + AI). 9 languages ar/en/fr/tr/es/it/de/ru/zh.",
     "main": "backend/server.js",
     "engines": {

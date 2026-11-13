@@ -73,4 +73,15 @@ const remove = async (req, res, next) => {
     } catch (err) { next(err); }
 };
 
-module.exports = { list, unreadCount, markRead, remove };
+// v4.4 — DELETE /api/notifications  → clear ALL notifications visible to the
+// requesting user (same audience scope as the list: store-scoped + role/user
+// filters; the platform owner clears the platform-level feed).
+const removeAll = async (req, res, next) => {
+    try {
+        const filter = audienceFilter(req);
+        const result = await Notification.deleteMany(filter);
+        return successResponse(res, { ok: true, deleted: result.deletedCount || 0 });
+    } catch (err) { next(err); }
+};
+
+module.exports = { list, unreadCount, markRead, remove, removeAll };

@@ -17,7 +17,7 @@
  *   • Web Push (VAPID) + Background Sync unchanged.
  * ============================================================ */
 
-const VERSION = 'v4.3.1';
+const VERSION = 'v4.4.0';
 const SHELL_CACHE = `dzpos-shell-${VERSION}`;
 const STATIC_CACHE = `dzpos-static-${VERSION}`;
 const API_CACHE = `dzpos-api-${VERSION}`;
@@ -79,6 +79,7 @@ const SHELL_ASSETS = [
     './vendor/jspdf.plugin.autotable.min.js',
     './vendor/socket.io.min.js',
     './vendor/xlsx.full.min.js',
+    './vendor/zxing.min.js',
     './lang/ar.json',
     './lang/en.json',
     './lang/fr.json',

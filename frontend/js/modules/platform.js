@@ -787,7 +787,7 @@ export async function renderPlatformPage(ctx) {
               <td><span class="badge badge-info">${b.trigger === 'auto-weekly' ? t('autoWeekly', 'أسبوعية تلقائية') : t('manual', 'يدوية')}</span></td>
               <td>${b.docsCount || '—'}</td>
               <td class="row-actions">
-                <a class="btn btn-sm btn-secondary" href="${apiBase}/api/backups/${encodeURIComponent(b.filename)}/download" target="_blank" rel="noopener">${t('download', 'تحميل')}</a>
+                <button class="btn btn-sm btn-secondary bk-download" data-file="${esc(b.filename)}">⬇ ${t('download', 'تحميل')}</button>
                 <button class="btn btn-sm btn-danger bk-restore" data-file="${esc(b.filename)}">⏪ ${t('restore', 'استعادة')}</button>
               </td>
             </tr>`).join('') : `<tr><td colspan="6" class="empty-state">${t('noBackups', 'لا نسخ بعد — أنشئ أول نسخة الآن')}</td></tr>`}
@@ -801,6 +801,14 @@ export async function renderPlatformPage(ctx) {
         renderBackups(body);
       } catch (err) { window.Toast && Toast.error(err.message); }
     });
+    // v4.4 — authenticated download (a plain <a href> cannot send the
+    // Authorization header → 401 "Non autorisé").
+    body.querySelectorAll('.bk-download').forEach(b => b.addEventListener('click', async () => {
+      try {
+        const name = await apiFetch.download('/api/backups/' + encodeURIComponent(b.dataset.file) + '/download', b.dataset.file);
+        window.Toast && Toast.success(t('backupDownloaded', 'تم تحميل النسخة ✓') + ' ' + name);
+      } catch (err) { /* toast already shown by apiFetch.download */ }
+    }));
     body.querySelectorAll('.bk-restore').forEach(b => b.addEventListener('click', async () => {
       const ok = await (window.Toast && Toast.confirm ? Toast.confirm(t('restoreConfirm', '⚠️ سيتم استبدال بيانات النظام الحالية بالنسخة. متأكد؟')) : Promise.resolve(window.confirm('restore?')));
       if (!ok) return;

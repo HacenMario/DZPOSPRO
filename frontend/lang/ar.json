@@ -23,7 +23,7 @@
   "email": "البريد الإلكتروني",
   "password": "كلمة المرور",
   "loginBtn": "تسجيل الدخول",
-  "version": "الإصدار 4.1.0",
+  "version": "الإصدار",
   "navSectionMain": "الرئيسية",
   "navSectionSales": "المبيعات",
   "navSectionInventory": "المخزون",
@@ -1242,5 +1242,12 @@
   "subPickStore": "عرض التفاصيل",
   "subPlatformFocusBanner": "أنت تعرض اشتراك متجر من حساب المنصة — طلبات التغيير تُرسل من طرف المتجر نفسه، ولديك التحكم الكامل من تبويب المنصة.",
   "subBackToStores": "كل المتاجر",
-  "subPlatformManagedCta": "يُدار من المنصة"
+  "subPlatformManagedCta": "يُدار من المنصة",
+  "clearAllNotifications": "مسح جميع الإشعارات",
+  "clearAllConfirm": "سيتم مسح جميع الإشعارات الظاهرة لك نهائياً. متابعة؟",
+  "clearAllYes": "نعم، امسح الكل",
+  "notificationsCleared": "تم مسح جميع الإشعارات ✓",
+  "backupDownloaded": "تم تحميل النسخة الاحتياطية ✓",
+  "cameraNeedsHttps": "مسح الباركود بالكاميرا يعمل في التطبيق المتصل بالإنترنت (https) أو بعد تثبيت التطبيق على الهاتف. يمكنك إدخال الرقم يدوياً هنا أو استخدام قارئ USB.",
+  "scannerLoadingEngine": "جاري تحميل محرك المسح…"
 }

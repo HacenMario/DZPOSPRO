@@ -23,7 +23,7 @@
   "email": "邮箱",
   "password": "密码",
   "loginBtn": "登录",
-  "version": "版本 4.1.0",
+  "version": "版本",
   "navSectionMain": "主菜单",
   "navSectionSales": "销售",
   "navSectionInventory": "库存",
@@ -1242,5 +1242,12 @@
   "subPickStore": "查看详情",
   "subPlatformFocusBanner": "您正从平台账户查看店铺订阅 — 变更申请由店铺发起，完整控制请使用平台标签页。",
   "subBackToStores": "所有店铺",
-  "subPlatformManagedCta": "由平台管理"
+  "subPlatformManagedCta": "由平台管理",
+  "clearAllNotifications": "清除所有通知",
+  "clearAllConfirm": "所有可见的通知将被永久删除。继续吗？",
+  "clearAllYes": "是的，全部清除",
+  "notificationsCleared": "通知已清除 ✓",
+  "backupDownloaded": "备份已下载 ✓",
+  "cameraNeedsHttps": "摄像头扫描需在在线应用（https）中或在手机上安装 PWA 后使用。您可以在此手动输入条码，或使用 USB 扫描器。",
+  "scannerLoadingEngine": "正在加载扫描引擎…"
 }

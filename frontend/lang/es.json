@@ -23,7 +23,7 @@
   "email": "Correo electrónico",
   "password": "Contraseña",
   "loginBtn": "Iniciar sesión",
-  "version": "Versión 4.1.0",
+  "version": "Versión",
   "navSectionMain": "Principal",
   "navSectionSales": "Ventas",
   "navSectionInventory": "Inventario",
@@ -1242,5 +1242,12 @@
   "subPickStore": "Ver detalles",
   "subPlatformFocusBanner": "Estás viendo la suscripción de una tienda desde la cuenta de plataforma — las solicitudes las envía la tienda, con control total desde la pestaña Plataforma.",
   "subBackToStores": "Todas las tiendas",
-  "subPlatformManagedCta": "Gestionado por la plataforma"
+  "subPlatformManagedCta": "Gestionado por la plataforma",
+  "clearAllNotifications": "Borrar todas las notificaciones",
+  "clearAllConfirm": "Todas las notificaciones visibles se eliminarán permanentemente. ¿Continuar?",
+  "clearAllYes": "Sí, borrar todo",
+  "notificationsCleared": "Notificaciones borradas ✓",
+  "backupDownloaded": "Copia de seguridad descargada ✓",
+  "cameraNeedsHttps": "El escaneo con cámara funciona en la aplicación en línea (https) o tras instalar la PWA en su teléfono. Puede escribir el código manualmente aquí o usar un lector USB.",
+  "scannerLoadingEngine": "Cargando el motor de escaneo…"
 }

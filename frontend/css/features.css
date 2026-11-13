@@ -14,9 +14,12 @@
 .notif-panel.open { display: flex; animation: notifIn .18s ease-out; }
 @keyframes notifIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
 .notif-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--border, #e5e7eb); }
-.notif-head-actions { display: flex; gap: 8px; }
+.notif-head-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .notif-mark-all { background: none; border: 0; color: #10b981; font-size: 12.5px; cursor: pointer; font-weight: 600; }
 .notif-mark-all:hover { text-decoration: underline; }
+/* v4.4 — clear-all button */
+.notif-clear-all { background: none; border: 0; color: #ef4444; font-size: 12.5px; cursor: pointer; font-weight: 600; white-space: nowrap; }
+.notif-clear-all:hover { text-decoration: underline; }
 .notif-list { overflow-y: auto; flex: 1; }
 .notif-item { display: flex; gap: 10px; padding: 11px 14px; border-bottom: 1px solid var(--border, #f0f1f3); cursor: pointer; align-items: flex-start; position: relative; }
 .notif-item:hover { background: var(--bg-hover, #f8faf9); }

@@ -23,7 +23,7 @@
   "email": "E-posta",
   "password": "Şifre",
   "loginBtn": "Giriş yap",
-  "version": "Sürüm 4.1.0",
+  "version": "Sürüm",
   "navSectionMain": "Ana",
   "navSectionSales": "Satışlar",
   "navSectionInventory": "Stok",
@@ -1242,5 +1242,12 @@
   "subPickStore": "Detayları gör",
   "subPlatformFocusBanner": "Mağaza aboneliğini platform hesabından görüyorsunuz — talepler mağaza tarafından gönderilir, tam kontrol Platform sekmesinde.",
   "subBackToStores": "Tüm mağazalar",
-  "subPlatformManagedCta": "Platform tarafından yönetilir"
+  "subPlatformManagedCta": "Platform tarafından yönetilir",
+  "clearAllNotifications": "Tüm bildirimleri temizle",
+  "clearAllConfirm": "Görünen tüm bildirimler kalıcı olarak silinecek. Devam edilsin mi?",
+  "clearAllYes": "Evet, tümünü sil",
+  "notificationsCleared": "Tüm bildirimler temizlendi ✓",
+  "backupDownloaded": "Yedek indirildi ✓",
+  "cameraNeedsHttps": "Kamera ile tarama çevrimiçi uygulamada (https) veya PWA telefonunuza yüklendikten sonra çalışır. Kodu buraya elle yazabilir veya USB okuyucu kullanabilirsiniz.",
+  "scannerLoadingEngine": "Tarama motoru yükleniyor…"
 }

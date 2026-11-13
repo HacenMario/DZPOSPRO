@@ -35,7 +35,7 @@
 
   let currentPage = 'dashboard';
   let currentPageRender = null;   // promise of in-flight render
-  const SIDEBAR_BREAKPOINT = 1024;
+  // v4.4 — the sidebar is a full-width-independent drawer (no breakpoint).
 
   /* ---------- Theme ---------- */
   function setTheme(theme) {
@@ -393,8 +393,9 @@ async function loadPage(page) {
         const page = link.dataset.page;
         if (!page) return;
         loadPage(page);
-        // On mobile, close drawer after navigation
-        if (window.innerWidth <= SIDEBAR_BREAKPOINT) closeSidebar();
+        // v4.4 — the sidebar is a drawer at every width now: close it after
+        // navigation so the content always starts unobstructed.
+        closeSidebar();
       });
       // Keyboard activate
       link.addEventListener('keydown', (e) => {
@@ -405,10 +406,8 @@ async function loadPage(page) {
       });
     });
 
-    // Window resize: auto-close drawer on desktop
-    window.addEventListener('resize', () => {
-      if (window.innerWidth > SIDEBAR_BREAKPOINT) closeSidebar();
-    });
+    // v4.4 — the drawer behaves the same at every width, so the old "close
+    // drawer when switching back to desktop" resize handler is gone.
 
     /* ---------- v4.1 — REAL connection status ----------
      * The old banner trusted navigator.onLine, which is unreliable on

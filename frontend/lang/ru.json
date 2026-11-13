@@ -23,7 +23,7 @@
   "email": "Эл. почта",
   "password": "Пароль",
   "loginBtn": "Войти",
-  "version": "Версия 4.1.0",
+  "version": "Версия",
   "navSectionMain": "Главное",
   "navSectionSales": "Продажи",
   "navSectionInventory": "Склад",
@@ -1242,5 +1242,12 @@
   "subPickStore": "Подробнее",
   "subPlatformFocusBanner": "Вы просматриваете подписку магазина из аккаунта платформы — запросы отправляет сам магазин, полный контроль доступен на вкладке Платформа.",
   "subBackToStores": "Все магазины",
-  "subPlatformManagedCta": "Управляется платформой"
+  "subPlatformManagedCta": "Управляется платформой",
+  "clearAllNotifications": "Удалить все уведомления",
+  "clearAllConfirm": "Все видимые уведомления будут удалены безвозвратно. Продолжить?",
+  "clearAllYes": "Да, удалить всё",
+  "notificationsCleared": "Уведомления удалены ✓",
+  "backupDownloaded": "Резервная копия загружена ✓",
+  "cameraNeedsHttps": "Сканирование камерой работает в онлайн-приложении (https) или после установки PWA на телефон. Вы можете ввести код вручную здесь или использовать USB-сканер.",
+  "scannerLoadingEngine": "Загрузка движка сканера…"
 }

@@ -44,6 +44,7 @@
         '<strong>' + t('notifications', 'الإشعارات') + '</strong>' +
         '<div class="notif-head-actions">' +
           '<button class="notif-mark-all" id="notifMarkAll">' + t('markAllRead', 'تعليم الكل كمقروء') + '</button>' +
+          '<button class="notif-clear-all" id="notifClearAll" title="' + esc(t('clearAllNotifications', 'مسح جميع الإشعارات')) + '">🗑 ' + esc(t('clearAllNotifications', 'مسح الجميع')) + '</button>' +
         '</div>' +
       '</div>' +
       '<div class="notif-list" id="notifList"><div class="notif-empty">' + t('noNotifications', 'لا إشعارات بعد') + '</div></div>' +
@@ -59,6 +60,31 @@
         items.forEach(i => { i._read = true; });
         renderList();
         updateBadge(0);
+      } catch (_) {}
+    });
+    // v4.4 — clear ALL notifications (with confirmation: irreversible)
+    panelEl.querySelector('#notifClearAll').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!items.length) { if (window.Toast) window.Toast.info(t('noNotifications', 'لا إشعارات بعد')); return; }
+      let ok = true;
+      if (typeof Swal === 'function') {
+        const res = await Swal.fire({
+          title: t('clearAllNotifications', 'مسح جميع الإشعارات'),
+          text: t('clearAllConfirm', 'سيتم مسح جميع الإشعارات الظاهرة لك نهائياً. متابعة؟'),
+          icon: 'warning', showCancelButton: true,
+          confirmButtonText: t('clearAllYes', 'نعم، امسح الكل'),
+          cancelButtonText: t('cancel', 'إلغاء'),
+          confirmButtonColor: '#ef4444'
+        });
+        ok = !!(res && res.isConfirmed);
+      }
+      if (!ok) return;
+      try {
+        await apiFetch.delete(API);
+        items = [];
+        renderList();
+        updateBadge(0);
+        if (window.Toast) window.Toast.success(t('notificationsCleared', 'تم مسح جميع الإشعارات ✓'));
       } catch (_) {}
     });
     panelEl.querySelector('#notifMore').addEventListener('click', async (e) => {

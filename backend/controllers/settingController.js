@@ -7,6 +7,16 @@ const { successResponse, errorResponse } = require('../utils/response');
 // GET /api/settings
 const getSettings = async (req, res, next) => {
     try {
+        // v4.4 — the platform owner is INDEPENDENT of any store: without a
+        // store focus he reads the PLATFORM settings document (storeId null)
+        // explicitly, never a random store's document; with a focus (via
+        // X-Store-Id) he reads exactly that store's settings.
+        if (req.user && req.user.role === 'superadmin') {
+            const focusId = req.storeFocus || null;
+            let setting = await Setting.findOne({ storeId: focusId || null });
+            if (!setting) setting = await Setting.create({ storeId: focusId || null });
+            return successResponse(res, { settings: setting });
+        }
         let setting = await Setting.findOne();
         if (!setting) {
             setting = await Setting.create({});
@@ -49,8 +59,14 @@ const updateSetting = async (req, res, next) => {
             }
         });
 
+        // v4.4 — super-admin writes target the PLATFORM settings document
+        // (storeId null) or the focused store's document, never a random one.
+        // Store users keep the tenant-plugin scoped behaviour untouched.
+        const filter = (req.user && req.user.role === 'superadmin')
+            ? { storeId: (req.storeFocus && String(req.storeFocus)) || null }
+            : {};
         const setting = await Setting.findOneAndUpdate(
-            {},
+            filter,
             { $set: setOps },
             { new: true, upsert: true, runValidators: true }
         );

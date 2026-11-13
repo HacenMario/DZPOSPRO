@@ -16,6 +16,7 @@
 //
 // Every APPROVED request is kept as a payment record that powers the
 // platform revenue statistics.
+const mongoose = require('mongoose'); // v4.4 — isObjectId() helper below
 const Store = require('../models/Store');
 const User = require('../models/User');
 const Product = require('../models/Product');
@@ -31,6 +32,21 @@ const { GRACE_DAYS } = require('../models/Store');
 const logger = require('../utils/logger');
 
 const DAY_MS = 24 * 3600 * 1000;
+
+// v4.4 — the production "Server error" guard: a malformed :id / storeId
+// used to surface as an ugly mongoose CastError → 500. Cast it cleanly and
+// let every handler bail out with a precise 400 + a traceable server log.
+function isObjectId(v) {
+    return !!v && mongoose.Types.ObjectId.isValid(String(v));
+}
+function castOrLog(place, value, err) {
+    logger.error(`[subscription:${place}] failed`, {
+        message: err && err.message,
+        stack: err && err.stack,
+        value: value === undefined ? 'undefined' : String(value).slice(0, 80)
+    });
+    throw err;
+}
 
 /* ================= helpers ================= */
 
@@ -342,6 +358,7 @@ const adminListRequests = async (req, res, next) => {
 const approveRequest = async (req, res, next) => {
     try {
         const lang = req.lang || 'ar';
+        if (!isObjectId(req.params.id)) return errorResponse(res, 400, getTranslation('subscriptionRequestNotFound', lang));
         const request = await SubscriptionRequest.findById(req.params.id);
         if (!request) return errorResponse(res, 404, getTranslation('subscriptionRequestNotFound', lang));
         if (request.status !== 'pending') return errorResponse(res, 400, getTranslation('subscriptionAlreadyProcessed', lang));
@@ -383,13 +400,17 @@ const approveRequest = async (req, res, next) => {
         }).catch(() => {});
 
         return successResponse(res, { request, store: store.toPublicInfo() }, getTranslation('subscriptionApproved', lang));
-    } catch (err) { next(err); }
+    } catch (err) {
+        castOrLog('approve', req.params.id, err);
+        next(err);
+    }
 };
 
 // POST /api/subscription/admin/requests/:id/reject
 const rejectRequest = async (req, res, next) => {
     try {
         const lang = req.lang || 'ar';
+        if (!isObjectId(req.params.id)) return errorResponse(res, 400, getTranslation('subscriptionRequestNotFound', lang));
         const request = await SubscriptionRequest.findById(req.params.id);
         if (!request) return errorResponse(res, 404, getTranslation('subscriptionRequestNotFound', lang));
         if (request.status !== 'pending') return errorResponse(res, 400, getTranslation('subscriptionAlreadyProcessed', lang));
@@ -417,7 +438,8 @@ const adminApplyManual = async (req, res, next) => {
     try {
         const lang = req.lang || 'ar';
         const { storeId, plan, billingCycle } = req.body;
-        if (!storeId || !plans.isPaidPlan(plan)) return errorResponse(res, 400, getTranslation('subscriptionInvalidPlan', lang));
+        if (!isObjectId(storeId)) return errorResponse(res, 400, getTranslation('subscriptionInvalidPlan', lang));
+        if (!plans.isPaidPlan(plan)) return errorResponse(res, 400, getTranslation('subscriptionInvalidPlan', lang));
         const cycle = billingCycle || 'monthly';
         if (!plans.isCycle(cycle)) return errorResponse(res, 400, getTranslation('subscriptionInvalidCycle', lang));
         const months = Math.min(36, Math.max(1, parseInt(req.body.months, 10) || plans.CYCLE_MONTHS[cycle] || 1));
@@ -465,7 +487,10 @@ const adminApplyManual = async (req, res, next) => {
         }).catch(() => {});
 
         return successResponse(res, { record, store: store.toPublicInfo() }, getTranslation('subscriptionApplied', lang));
-    } catch (err) { next(err); }
+    } catch (err) {
+        castOrLog('apply', (req.body || {}).storeId, err);
+        next(err);
+    }
 };
 
 // GET /api/subscription/admin/overview — billing KPIs + revenue statistics.

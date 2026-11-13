@@ -23,7 +23,7 @@
   "email": "Email",
   "password": "Password",
   "loginBtn": "Accedi",
-  "version": "Versione 4.1.0",
+  "version": "Versione",
   "navSectionMain": "Principale",
   "navSectionSales": "Vendite",
   "navSectionInventory": "Magazzino",
@@ -1242,5 +1242,12 @@
   "subPickStore": "Vedi dettagli",
   "subPlatformFocusBanner": "Stai visualizzando l’abbonamento di un negozio dall’account piattaforma — le richieste arrivano dal negozio, controllo completo nella scheda Piattaforma.",
   "subBackToStores": "Tutti i negozi",
-  "subPlatformManagedCta": "Gestito dalla piattaforma"
+  "subPlatformManagedCta": "Gestito dalla piattaforma",
+  "clearAllNotifications": "Cancella tutte le notifiche",
+  "clearAllConfirm": "Tutte le notifiche visibili verranno eliminate definitivamente. Continuare?",
+  "clearAllYes": "Sì, cancella tutto",
+  "notificationsCleared": "Notifiche cancellate ✓",
+  "backupDownloaded": "Backup scaricato ✓",
+  "cameraNeedsHttps": "La scansione con la fotocamera funziona nell’app online (https) o dopo l’installazione della PWA sul telefono. Puoi digitare il codice manualmente qui o usare un lettore USB.",
+  "scannerLoadingEngine": "Caricamento del motore di scansione…"
 }

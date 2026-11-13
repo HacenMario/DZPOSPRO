@@ -59,8 +59,11 @@
     document.querySelectorAll('[data-i18n]').forEach(el => {
       const key = el.getAttribute('data-i18n');
       if (!key) return;
-      const val = data[key];
+      let val = data[key];
       if (val === undefined) return;
+      // v4.4 — the version chip composes the live build number from the
+      // single DZPOS_VERSION source so it can never go stale again.
+      if (key === 'version') val = val + ' v' + (global.DZPOS_VERSION || '4.4.0');
       // Only set when element has no child elements OR is a pure text node owner
       if (el.children.length === 0) {
         el.textContent = val;

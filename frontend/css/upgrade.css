@@ -99,9 +99,11 @@ img, svg, canvas, video, iframe { max-width: 100%; }
 
 /* ============ 2. APP SHELL — sidebar + topbar ============ */
 .sidebar {
-  box-shadow: 1px 0 0 var(--border-subtle);
+  /* v4.4 — the sidebar is a drawer at every width: keep a real elevation
+     shadow so it reads as an overlay above the content while open. */
+  box-shadow: var(--shadow-xl);
 }
-[data-theme="dark"] .sidebar { box-shadow: 1px 0 0 rgba(255,255,255,.04); }
+[data-theme="dark"] .sidebar { box-shadow: var(--shadow-xl); }
 
 .sidebar-logo .logo-mark {
   background: linear-gradient(135deg, #10b981 0%, #059669 60%, #047857 100%);

@@ -10,26 +10,35 @@
    ============================================================ */
 .app-shell {
   display: grid;
-  grid-template-columns: var(--sidebar-width) 1fr;
+  /* v4.4 — drawer layout at EVERY width: the sidebar no longer occupies a
+     permanent column; it slides in over the content via the hamburger.
+     (User request: the sidebar must auto-hide on desktop too.) */
+  grid-template-columns: 1fr;
   grid-template-rows: 100vh;
   min-height: 100vh;
   background: var(--bg-body);
 }
 [dir="rtl"] .app-shell { direction: rtl; }
 
-/* ---------- Sidebar ---------- */
+/* ---------- Sidebar (drawer at every width) ---------- */
 .sidebar {
   background: var(--bg-sidebar);
   border-inline-end: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
   height: 100vh;
-  position: sticky;
+  position: fixed;
   top: 0;
+  inset-inline-start: 0;
+  width: var(--sidebar-width);
   z-index: var(--z-sidebar);
+  transform: translateX(calc(-1 * var(--sidebar-width)));
   transition: transform var(--transition-slow);
   overflow: hidden;
+  box-shadow: var(--shadow-xl);
 }
+[dir="rtl"] .sidebar { transform: translateX(var(--sidebar-width)); }
+.sidebar.open { transform: translateX(0); }
 
 .sidebar-logo {
   display: flex;
@@ -209,7 +218,8 @@
 
 .hamburger {
   width: 40px; height: 40px;
-  display: none;
+  /* v4.4 — visible at every width: the sidebar is a drawer on desktop too */
+  display: grid;
   place-items: center;
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
@@ -282,7 +292,7 @@
 .offline-banner svg { width: 18px; height: 18px; }
 [data-theme="dark"] .offline-banner { color: var(--accent); }
 
-/* ---------- Sidebar overlay (mobile) ---------- */
+/* ---------- Sidebar overlay ---------- */
 .sidebar-overlay {
   display: none;
   position: fixed;
@@ -294,21 +304,6 @@
 }
 .sidebar-overlay.show { display: block; opacity: 1; }
 
-/* ---------- Responsive sidebar ---------- */
-@media (max-width: 1024px) {
-  .app-shell { grid-template-columns: 1fr; }
-  .sidebar {
-    position: fixed;
-    top: 0;
-    inset-inline-start: 0;
-    width: var(--sidebar-width);
-    transform: translateX(calc(-1 * var(--sidebar-width)));
-    box-shadow: var(--shadow-xl);
-  }
-  [dir="rtl"] .sidebar { transform: translateX(var(--sidebar-width)); }
-  .sidebar.open { transform: translateX(0); }
-  .hamburger { display: grid; }
-}
 @media (max-width: 600px) {
   .content-area { padding: 1rem; }
   .topbar { padding: 0 0.85rem; }

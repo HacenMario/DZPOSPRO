@@ -23,7 +23,7 @@
   "email": "Adresse e-mail",
   "password": "Mot de passe",
   "loginBtn": "Connexion",
-  "version": "Version 4.1.0",
+  "version": "Version",
   "navSectionMain": "Principal",
   "navSectionSales": "Ventes",
   "navSectionInventory": "Stock",
@@ -1242,5 +1242,12 @@
   "subPickStore": "Voir les détails",
   "subPlatformFocusBanner": "Vous consultez l’abonnement d’un magasin depuis le compte plateforme — les demandes viennent du magasin, et vous gardez le contrôle total depuis l’onglet Plateforme.",
   "subBackToStores": "Tous les magasins",
-  "subPlatformManagedCta": "Géré par la plateforme"
+  "subPlatformManagedCta": "Géré par la plateforme",
+  "clearAllNotifications": "Tout effacer les notifications",
+  "clearAllConfirm": "Toutes les notifications visibles seront supprimées définitivement. Continuer ?",
+  "clearAllYes": "Oui, tout effacer",
+  "notificationsCleared": "Notifications effacées ✓",
+  "backupDownloaded": "Sauvegarde téléchargée ✓",
+  "cameraNeedsHttps": "Le scan par caméra fonctionne dans l’application en ligne (https) ou après installation de la PWA sur votre téléphone. Vous pouvez saisir le code manuellement ici ou utiliser un lecteur USB.",
+  "scannerLoadingEngine": "Chargement du moteur de scan…"
 }

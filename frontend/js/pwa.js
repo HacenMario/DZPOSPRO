@@ -110,7 +110,7 @@
       var v = (window.DZPOS_VERSION || '').toString().trim();
       if (v) return v.charAt(0).toLowerCase() === 'v' ? v.slice(1) : v;
     } catch (_) {}
-    return '4.3.1';
+    return '4.4.0';
   }
   function normVersion(v) {
     var s = String(v || '').trim().toLowerCase();

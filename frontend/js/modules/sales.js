@@ -1908,20 +1908,45 @@ async function lookupBarcode(code) {
 }
 
 /* ============================================================
- * Camera barcode scanner (uses native BarcodeDetector API when
- * supported; otherwise falls back to a manual entry prompt).
+ * Camera barcode scanner — v4.4 dual engine:
+ *   1. Native BarcodeDetector API (Chrome/Edge/Android — fast, GPU)
+ *   2. ZXing JS fallback (vendor/zxing.min.js — iOS Safari, Firefox,
+ *      every browser; ~336 KB loaded on demand from our own origin)
+ *   3. Manual entry as the last resort (+ USB scanners keep working
+ *      via the keyboard-wedge listener on the search field).
+ * Requires a secure context (https or localhost) for getUserMedia;
+ * file:// pages get a clear explanation instead of a dead end.
  * ============================================================ */
+
+let __zxingLoading = null;
+function loadZxing() {
+  if (window.ZXing && window.ZXing.BrowserMultiFormatReader) return Promise.resolve(true);
+  if (__zxingLoading) return __zxingLoading;
+  __zxingLoading = new Promise((resolve) => {
+    const sc = document.createElement('script');
+    sc.src = 'vendor/zxing.min.js?v=4.4.0';
+    sc.onload = () => resolve(!!(window.ZXing && window.ZXing.BrowserMultiFormatReader));
+    sc.onerror = () => resolve(false);
+    document.head.appendChild(sc);
+  });
+  return __zxingLoading;
+}
+
+function secureMediaAvailable() {
+  return !!(navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function');
+}
+
 async function openBarcodeCameraScanner() {
-  // 1) Check support for the native BarcodeDetector API (Chrome / Edge on
-  //    desktop and Android Chrome). Safari/Firefox do not support it yet.
-  if (!('BarcodeDetector' in window) || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    // Fallback: ask the user to either use the manual search field or
-    // attach a USB barcode scanner (which works as a keyboard wedge).
+  // 1) A camera needs a secure context (https / localhost). On file:// the
+  //    browser blocks getUserMedia entirely — explain it instead of failing.
+  if (!secureMediaAvailable()) {
     if (typeof Swal !== 'undefined') {
       Swal.fire({
         title: t('scanBarcode', 'Scan barcode'),
         html: '<div style="font-size:0.9rem;line-height:1.5;text-align:' + (document.documentElement.dir === 'rtl' ? 'right' : 'left') + ';">' +
-              escapeHtml(t('cameraNotSupported', 'Your browser does not support camera barcode scanning. Please use a USB barcode scanner (works as a keyboard) or type the barcode in the search field and press Enter.')) +
+              escapeHtml(window.isSecureContext
+                ? t('cameraNotSupported', 'Your browser does not support camera barcode scanning. Please use a USB barcode scanner (works as a keyboard) or type the barcode in the search field and press Enter.')
+                : t('cameraNeedsHttps', 'Camera scanning works in the online app (https) or after installing the PWA. Here you can type the barcode manually, or use a USB barcode scanner.')) +
               '</div>' +
               '<input id="manualBarcodeInput" class="input" type="text" placeholder="' + escapeHtml(t('barcode', 'Barcode')) + '" style="margin-top:0.75rem;" autofocus />',
         confirmButtonText: t('search', 'Search'),
@@ -1950,21 +1975,36 @@ async function openBarcodeCameraScanner() {
     return;
   }
 
-  // 2) Open the camera modal
-  let stream = null;
-  let detector = null;
-  let rafId = null;
-  let stopped = false;
-  try {
-    const formats = await window.BarcodeDetector.getSupportedFormats();
-    detector = new window.BarcodeDetector({
-      formats: formats && formats.length ? formats : ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e']
-    });
-  } catch (e) {
-    if (window.Toast) window.Toast.error(t('cameraInitFailed', 'Camera barcode detector failed to initialize'));
-    return;
+  // 2) Pick the best available decoding engine for THIS browser.
+  const nativeAvailable = 'BarcodeDetector' in window;
+  let zxingReader = null;
+  if (!nativeAvailable) {
+    if (window.Toast) window.Toast.info(t('scannerLoadingEngine', 'جاري تحميل محرك المسح…'));
+    const ok = await loadZxing();
+    if (!ok) {
+      // ZXing failed to load (offline?) → manual entry path
+      if (window.Toast) window.Toast.error(t('cameraInitFailed', 'Camera barcode detector failed to initialize'));
+      openBarcodeManualEntry();
+      return;
+    }
+    try {
+      const F = window.ZXing.BarcodeFormat, H = window.ZXing.DecodeHintType;
+      const formats = [
+        F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39,
+        F.CODE_93, F.ITF, F.CODABAR, F.QR_CODE, F.DATA_MATRIX
+      ].filter(Boolean);
+      const hints = new Map();
+      hints.set(H.POSSIBLE_FORMATS, formats);
+      hints.set(H.TRY_HARDER, true);
+      zxingReader = new window.ZXing.BrowserMultiFormatReader(hints, 180);
+    } catch (e) {
+      if (window.Toast) window.Toast.error(t('cameraInitFailed', 'Camera barcode detector failed to initialize'));
+      openBarcodeManualEntry();
+      return;
+    }
   }
 
+  // 3) Shared camera modal (same UI for both engines)
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.id = 'posCameraScanModal';
@@ -1991,60 +2031,115 @@ async function openBarcodeCameraScanner() {
     </div>`;
   document.body.appendChild(overlay);
 
+  let stream = null;
+  let rafId = null;
+  let stopped = false;
+  let zxingControls = null;
+
   function close() {
+    if (stopped) return;
     stopped = true;
     if (rafId) cancelAnimationFrame(rafId);
+    try { if (zxingControls && typeof zxingControls.stop === 'function') zxingControls.stop(); } catch (_) {}
+    try { if (zxingReader && typeof zxingReader.reset === 'function') zxingReader.reset(); } catch (_) {}
     if (stream) {
-      stream.getTracks().forEach(t => { try { t.stop(); } catch (_) {} });
+      stream.getTracks().forEach(tr => { try { tr.stop(); } catch (_) {} });
       stream = null;
     }
     overlay.remove();
+    document.removeEventListener('keydown', escHandler);
+  }
+
+  function onCode(code) {
+    if (stopped || !code) return;
+    if (window.Toast) window.Toast.success(t('barcodeFound', 'Barcode found') + ': ' + code);
+    close();
+    lookupBarcode(code);
   }
 
   overlay.querySelector('.modal-close').addEventListener('click', close);
   overlay.querySelector('[data-action="cancel"]').addEventListener('click', close);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-
-  const escHandler = (e) => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', escHandler); } };
+  const escHandler = (e) => { if (e.key === 'Escape') close(); };
   document.addEventListener('keydown', escHandler);
 
   const video = overlay.querySelector('#posScanVideo');
-  try {
-    // Prefer the back camera on mobile devices
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'environment' } },
-      audio: false
-    });
-    video.srcObject = stream;
-    await new Promise(r => { video.onloadedmetadata = () => { video.play(); r(); }; });
-  } catch (e) {
-    if (window.Toast) window.Toast.error(t('cameraAccessDenied', 'Camera access denied or unavailable'));
-    close();
-    return;
-  }
 
-  // 3) Start detecting — runs until a code is found or the modal is closed
-  async function tick() {
-    if (stopped || !video || video.readyState < 2) {
-      if (!stopped) rafId = requestAnimationFrame(tick);
+  // 4a) ENGINE A — native BarcodeDetector (own getUserMedia stream)
+  if (nativeAvailable) {
+    let detector = null;
+    try {
+      const formats = await window.BarcodeDetector.getSupportedFormats();
+      detector = new window.BarcodeDetector({
+        formats: formats && formats.length ? formats : ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e']
+      });
+    } catch (e) {
+      if (window.Toast) window.Toast.error(t('cameraInitFailed', 'Camera barcode detector failed to initialize'));
+      close();
       return;
     }
     try {
-      const codes = await detector.detect(video);
-      if (codes && codes.length > 0) {
-        const code = codes[0].rawValue || '';
-        if (code) {
-          if (window.Toast) window.Toast.success(t('barcodeFound', 'Barcode found') + ': ' + code);
-          close();
-          // Look up via the backend (same path as the manual scanner)
-          await lookupBarcode(code);
-          return;
-        }
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false
+      });
+      video.srcObject = stream;
+      await new Promise(r => { video.onloadedmetadata = () => { video.play().catch(() => {}); r(); }; });
+    } catch (e) {
+      if (window.Toast) window.Toast.error(t('cameraAccessDenied', 'Camera access denied or unavailable'));
+      close();
+      return;
+    }
+    async function tick() {
+      if (stopped) return;
+      if (!video || video.readyState < 2) {
+        rafId = requestAnimationFrame(tick);
+        return;
       }
-    } catch (_) { /* ignore — transient detection error */ }
+      try {
+        const codes = await detector.detect(video);
+        if (codes && codes.length > 0 && codes[0].rawValue) onCode(codes[0].rawValue);
+      } catch (_) { /* transient detection error */ }
+      if (!stopped) rafId = requestAnimationFrame(tick);
+    }
     rafId = requestAnimationFrame(tick);
+    return;
   }
-  rafId = requestAnimationFrame(tick);
+
+  // 4b) ENGINE B — ZXing (manages camera + decoding; works on iOS/Firefox)
+  try {
+    zxingControls = await zxingReader.decodeFromConstraints(
+      { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false },
+      video,
+      (result) => { if (result && result.text) onCode(result.text); }
+    );
+    stream = zxingReader && zxingReader.stream ? zxingReader.stream : null;
+  } catch (e) {
+    if (window.Toast) window.Toast.error(t('cameraAccessDenied', 'Camera access denied or unavailable'));
+    close();
+  }
+}
+
+/* Manual entry dialog — used when no engine and no camera are available. */
+function openBarcodeManualEntry() {
+  if (typeof Swal !== 'undefined') {
+    Swal.fire({
+      title: t('scanBarcode', 'Scan barcode'),
+      html: '<input id="manualBarcodeInput" class="input" type="text" placeholder="' + escapeHtml(t('barcode', 'Barcode')) + '" style="margin-top:0.5rem;" autofocus />',
+      confirmButtonText: t('search', 'Search'),
+      cancelButtonText: t('cancel', 'Cancel'),
+      showCancelButton: true,
+      confirmButtonColor: '#10b981',
+      preConfirm: () => {
+        const v = document.getElementById('manualBarcodeInput').value.trim();
+        if (!v) { Swal.showValidationMessage(t('barcodeRequired', 'Barcode is required')); return false; }
+        return v;
+      }
+    }).then((res) => { if (res && res.isConfirmed && res.value) lookupBarcode(res.value); });
+  } else {
+    const code = window.prompt(t('enterBarcode', 'Enter barcode:'));
+    if (code) lookupBarcode(code.trim());
+  }
 }
 
 async function applyCoupon() {
