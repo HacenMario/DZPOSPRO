@@ -10,13 +10,13 @@
 //                                            Railway all-in-one, reverse proxy)
 // This matches the production topology:
 //   Frontend → https://dzpospro.vercel.app
-//   Backend  → https://dzpospro-production.up.railway.app
+//   Backend  → https://dzpospro-production-ec3f34a9.up.railway.app
 function detectApiBase() {
   var o = '';
   try { o = localStorage.getItem('dzpos_api_base') || window.DZPOS_API_BASE || ''; } catch (e) { /* private mode */ }
   if (o) return String(o).replace(/\/+$/, '');
-  if (location.protocol === 'file:') return 'https://dzpospro-production.up.railway.app';
-  if (/(^|\.)vercel\.app$/i.test(location.hostname || '')) return 'https://dzpospro-production.up.railway.app';
+  if (location.protocol === 'file:') return 'https://dzpospro-production-ec3f34a9.up.railway.app';
+  if (/(^|\.)vercel\.app$/i.test(location.hostname || '')) return 'https://dzpospro-production-ec3f34a9.up.railway.app';
   return '';
 }
 

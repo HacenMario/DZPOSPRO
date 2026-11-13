@@ -20,8 +20,8 @@
     var o = '';
     try { o = localStorage.getItem('dzpos_api_base') || window.DZPOS_API_BASE || ''; } catch (e) {}
     if (o) return String(o).replace(/\/+$/, '');
-    if (location.protocol === 'file:') return 'https://dzpospro-production.up.railway.app';
-    if (/(^|\.)vercel\.app$/i.test(location.hostname || '')) return 'https://dzpospro-production.up.railway.app';
+    if (location.protocol === 'file:') return 'https://dzpospro-production-ec3f34a9.up.railway.app';
+    if (/(^|\.)vercel\.app$/i.test(location.hostname || '')) return 'https://dzpospro-production-ec3f34a9.up.railway.app';
     return '';
   })();
 
@@ -410,14 +410,86 @@ async function loadPage(page) {
       if (window.innerWidth > SIDEBAR_BREAKPOINT) closeSidebar();
     });
 
-    // Offline banner
+    /* ---------- v4.1 — REAL connection status ----------
+     * The old banner trusted navigator.onLine, which is unreliable on
+     * phones (it can report "offline" while the API is reachable, which
+     * showed a permanent Offline banner and made users think data was
+     * gone). We now probe GET /api/health (5s timeout) and drive BOTH
+     * the topbar chip and the banner from the actual result.
+     */
     const offlineBanner = document.getElementById('offlineBanner');
-    function updateOnline() {
-      if (offlineBanner) offlineBanner.classList.toggle('show', !navigator.onLine);
+    const connChip = document.getElementById('connChip');
+    let connState = 'checking'; // online | offline | checking
+    let connTimer = null;
+
+    function connT(key, fb) { return (window.t ? window.t(key, fb) : fb); }
+
+    function renderConn() {
+      const bannerMsg = document.getElementById('offlineBannerMsg');
+      if (offlineBanner) {
+        offlineBanner.classList.toggle('show', connState !== 'online');
+        offlineBanner.classList.toggle('is-checking', connState === 'checking');
+      }
+      if (bannerMsg) {
+        bannerMsg.textContent = connState === 'checking'
+          ? connT('connChecking', 'جاري التحقق من الاتصال بالخادم...')
+          : connT('offlineMessage', 'لا يوجد اتصال بالخادم. تحقّق من الإنترنت ثم أعد المحاولة.');
+      }
+      if (connChip) {
+        connChip.classList.remove('conn-online', 'conn-offline', 'conn-checking');
+        connChip.classList.add('conn-' + connState);
+        const label = connChip.querySelector('.conn-label');
+        if (label) {
+          label.textContent = connState === 'online'
+            ? connT('connOnline', 'متصل')
+            : (connState === 'offline' ? connT('connOffline', 'غير متصل') : connT('connCheckingShort', 'جاري التحقق'));
+        }
+        connChip.title = connState === 'online'
+          ? connT('connOnlineTitle', 'الخادم متصل ويعمل بشكل طبيعي')
+          : connT('connOfflineTitle', 'تعذّر الوصول إلى الخادم — اضغط لإعادة الفحص');
+      }
     }
-    window.addEventListener('online', updateOnline);
-    window.addEventListener('offline', updateOnline);
-    updateOnline();
+
+    async function probeConnection() {
+      const prevState = connState;
+      connState = 'checking';
+      renderConn();
+      let ok = false;
+      try {
+        const ctrl = ('AbortController' in window) ? new AbortController() : null;
+        const tm = ctrl ? setTimeout(() => { try { ctrl.abort(); } catch (_) {} }, 5000) : null;
+        const res = await fetch(API_BASE + '/api/health?t=' + Date.now(), { cache: 'no-store', signal: ctrl ? ctrl.signal : undefined });
+        if (tm) clearTimeout(tm);
+        const j = await res.json().catch(() => null);
+        ok = res.ok && j && (j.success !== false);
+      } catch (_) { ok = false; }
+      connState = ok ? 'online' : 'offline';
+      renderConn();
+      // network came back → auto-refresh the current page data
+      if (ok && prevState === 'offline') {
+        try { window.loadPage(window.currentPage || 'dashboard'); } catch (_) {}
+      }
+      return ok;
+    }
+
+    function scheduleConnProbes() {
+      if (connTimer) clearInterval(connTimer);
+      connTimer = setInterval(() => { if (!document.hidden) probeConnection(); }, 45000);
+    }
+
+    const retryBtn = document.getElementById('connRetryBtn');
+    if (retryBtn) retryBtn.addEventListener('click', (e) => { e.preventDefault(); probeConnection(); });
+    if (connChip) connChip.addEventListener('click', () => { probeConnection(); });
+    window.addEventListener('online', () => probeConnection());
+    window.addEventListener('offline', () => probeConnection());
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) probeConnection(); });
+    // fast reactions from the apiFetch layer
+    window.addEventListener('dzpos:api-offline', () => { if (connState !== 'checking') { connState = 'offline'; renderConn(); } });
+    window.addEventListener('dzpos:api-online', () => { probeConnection(); });
+
+    renderConn();
+    probeConnection();
+    scheduleConnProbes();
 
     // Keyboard shortcuts
     document.addEventListener('keydown', onKeydown);

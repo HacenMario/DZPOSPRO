@@ -43,6 +43,45 @@ function escapeHtml(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+/* ---------- v4.1 — local timezone helpers ----------
+ * The old code sent toISOString() (UTC) date strings, so "today" started
+ * at 01:00 local time in Algeria and the last hour of each day leaked into
+ * the next one server-side → charts/statistics never matched reality.
+ * We now send full ISO timestamps with the device UTC offset AND a `tz`
+ * parameter so the backend groups days/hours exactly like the user sees.
+ */
+function tzString() {
+  const off = -new Date().getTimezoneOffset();
+  const p = n => String(n).padStart(2, '0');
+  const sign = off >= 0 ? '+' : '-';
+  const abs = Math.abs(off);
+  return sign + p(Math.floor(abs / 60)) + ':' + p(abs % 60);
+}
+function isoDay(d) {
+  const p = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+}
+function isoWithOffset(d, endOfDay) {
+  return isoDay(d) + 'T' + (endOfDay ? '23:59:59.999' : '00:00:00.000') + tzString();
+}
+
+/* ---------- v4.1 — animated counters ---------- */
+function animateValue(el, target, fmt) {
+  if (!el) return;
+  const num = Number(target) || 0;
+  if (!window.requestAnimationFrame || num === 0) { el.textContent = fmt(num); return; }
+  const dur = 850;
+  const start = performance.now();
+  function step(now) {
+    const p = Math.min(1, (now - start) / dur);
+    const eased = 1 - Math.pow(1 - p, 3);
+    el.textContent = fmt(num * eased);
+    if (p < 1) requestAnimationFrame(step);
+    else el.textContent = fmt(num);
+  }
+  requestAnimationFrame(step);
+}
+
 /* ---------- Skeleton ---------- */
 function renderSkeleton() {
   const content = document.getElementById('pageContent');
@@ -97,17 +136,17 @@ function emptyState(title, sub) {
     </div>`;
 }
 
-/* ---------- Render stat cards ---------- */
+/* ---------- Render stat cards (v4.1: raw values ride along for animation) ---------- */
 function renderStatCards(stats) {
   const cards = [
     { icon: '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>',
-      color: 'green', value: fmtNum(stats.totalProducts), label: t('totalProducts', 'Total products') },
+      color: 'green', value: fmtNum(stats.totalProducts), raw: stats.totalProducts, fmt: fmtNum, label: t('totalProducts', 'Total products') },
     { icon: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
-      color: 'cyan', value: fmtNum(stats.totalCustomers), label: t('totalCustomers', 'Total customers') },
+      color: 'cyan', value: fmtNum(stats.totalCustomers), raw: stats.totalCustomers, fmt: fmtNum, label: t('totalCustomers', 'Total customers') },
     { icon: '<circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>',
-      color: 'amber', value: fmtNum(stats.totalSalesToday), label: t('salesToday', 'Sales today') },
+      color: 'amber', value: fmtNum(stats.totalSalesToday), raw: stats.totalSalesToday, fmt: fmtNum, label: t('salesToday', 'Sales today') },
     { icon: '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
-      color: 'green', value: fmtCurrency(stats.totalRevenueToday), label: t('revenueToday', 'Revenue today') }
+      color: 'green', value: fmtCurrency(stats.totalRevenueToday), raw: stats.totalRevenueToday, fmt: fmtCurrency, label: t('revenueToday', 'Revenue today') }
   ];
   return `
     <div class="stats-grid">
@@ -117,7 +156,7 @@ function renderStatCards(stats) {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${c.icon}</svg>
           </div>
           <div class="stat-info">
-            <div class="stat-value">${c.value}</div>
+            <div class="stat-value" data-raw="${Number(c.raw) || 0}" data-fmt="count">${c.value}</div>
             <div class="stat-label">${c.label}</div>
           </div>
         </div>`).join('')}
@@ -141,6 +180,16 @@ function getChartColors() {
   };
 }
 
+/* v4.1 — vertical gradient fill for area/line charts */
+function areaGradient(context, rgb, topA, bottomA) {
+  const area = context.chart && context.chart.chartArea;
+  if (!area) return 'rgba(' + rgb + ',' + (topA || 0.22) + ')';
+  const g = context.chart.ctx.createLinearGradient(0, area.top, 0, area.bottom);
+  g.addColorStop(0, 'rgba(' + rgb + ',' + (topA || 0.22) + ')');
+  g.addColorStop(1, 'rgba(' + rgb + ',' + (bottomA == null ? 0.02 : bottomA) + ')');
+  return g;
+}
+
 function renderSalesTrendChart(labels, counts, revenues) {
   const ctx = document.getElementById('salesTrendChart');
   if (!ctx || typeof Chart === 'undefined') return;
@@ -151,18 +200,18 @@ function renderSalesTrendChart(labels, counts, revenues) {
       labels,
       datasets: [
         { label: t('sales', 'Sales'), data: counts, borderColor: c.primary,
-          backgroundColor: 'rgba(' + c.primaryRgb + ',0.12)', fill: true, tension: 0.35, borderWidth: 2,
-          pointBackgroundColor: c.primary, pointRadius: 3, pointHoverRadius: 5 },
+          backgroundColor: (context) => areaGradient(context, c.primaryRgb), fill: true, tension: 0.4, borderWidth: 2.5,
+          pointBackgroundColor: c.primary, pointRadius: 3, pointHoverRadius: 6 },
         { label: t('revenueToday', 'Revenue'), data: revenues, borderColor: c.accent,
-          backgroundColor: 'rgba(' + c.accentRgb + ',0.10)', fill: true, tension: 0.35, borderWidth: 2,
-          pointBackgroundColor: c.accent, pointRadius: 3, pointHoverRadius: 5,
+          backgroundColor: (context) => areaGradient(context, c.accentRgb), fill: true, tension: 0.4, borderWidth: 2.5,
+          pointBackgroundColor: c.accent, pointRadius: 3, pointHoverRadius: 6,
           yAxisID: 'y1' }
       ]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
-      plugins: { legend: { display: true, labels: { color: c.text, font: { family: 'Tajawal, sans-serif' } } } },
+      plugins: { legend: { display: true, labels: { color: c.text, font: { family: 'Tajawal, sans-serif' }, usePointStyle: true, boxWidth: 8 } } },
       scales: {
         x: { ticks: { color: c.text, font: { family: 'Tajawal, sans-serif' } }, grid: { color: c.grid, drawBorder: false } },
         y: { position: 'start', ticks: { color: c.text, font: { family: 'Tajawal, sans-serif' } }, grid: { color: c.grid, drawBorder: false } },
@@ -316,6 +365,86 @@ function openAllRecentSalesModal(sales) {
   });
 }
 
+/* ---------- v4.1 — dashboard toolbar (refresh + last update + auto) ---------- */
+function renderDashToolbar() {
+  const auto = (() => { try { return localStorage.getItem('dzpos_dash_auto') === '1'; } catch (_) { return false; } })();
+  return `
+    <div class="dash-toolbar no-print">
+      <div class="dash-updated" id="dashUpdatedWrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span>${t('dashLastUpdate', 'آخر تحديث')}: <strong id="dashUpdatedAt">—</strong></span>
+      </div>
+      <div class="dash-toolbar-actions">
+        <label class="dash-auto-toggle" for="dashAutoRefresh" title="${t('dashAutoRefreshTitle', 'تحديث تلقائي كل دقيقة')}">
+          <input type="checkbox" id="dashAutoRefresh" ${auto ? 'checked' : ''} />
+          <span>${t('dashAutoRefresh', 'تحديث تلقائي')}</span>
+        </label>
+        <button class="btn btn-secondary btn-sm" id="dashRefreshBtn" type="button" title="${t('dashRefresh', 'تحديث الآن')}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          <span>${t('dashRefresh', 'تحديث الآن')}</span>
+        </button>
+      </div>
+    </div>`;
+}
+
+let _dashAutoTimer = null;
+function manageAutoRefresh() {
+  if (_dashAutoTimer) { clearInterval(_dashAutoTimer); _dashAutoTimer = null; }
+  let auto = false;
+  try { auto = localStorage.getItem('dzpos_dash_auto') === '1'; } catch (_) {}
+  if (auto) {
+    _dashAutoTimer = setInterval(() => {
+      if (window.currentPage === 'dashboard' && !document.hidden) {
+        renderDashboardPage().catch(() => {});
+      }
+    }, 60000);
+  }
+}
+
+function stampUpdatedAt() {
+  const el = document.getElementById('dashUpdatedAt');
+  if (!el) return;
+  try { el.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); } catch (_) { el.textContent = ''; }
+}
+
+function wireDashToolbar() {
+  const btn = document.getElementById('dashRefreshBtn');
+  if (btn) btn.addEventListener('click', () => renderDashboardPage().catch(() => {}));
+  const cb = document.getElementById('dashAutoRefresh');
+  if (cb) cb.addEventListener('change', () => {
+    try { localStorage.setItem('dzpos_dash_auto', cb.checked ? '1' : '0'); } catch (_) {}
+    manageAutoRefresh();
+    if (window.Toast && window.Toast.info) {
+      window.Toast.info(cb.checked
+        ? t('dashAutoOn', 'تم تفعيل التحديث التلقائي كل دقيقة')
+        : t('dashAutoOff', 'تم إيقاف التحديث التلقائي'));
+    }
+  });
+}
+
+/* ---------- v4.1 — What's new (first visit of this version) ---------- */
+function maybeShowWhatsNew() {
+  try {
+    if (localStorage.getItem('dzpos_whatsnew_v41') === '1') return;
+    if (typeof Swal === 'undefined') return;
+    localStorage.setItem('dzpos_whatsnew_v41', '1');
+    const items = [
+      t('whatsNew1', 'إصلاح كامل للجوال: اتصال حقيقي بالخادم، تحديث فوري للنسخة، وصفر بيانات قديمة'),
+      t('whatsNew2', 'الإحصائيات والرسومات تتحدث الآن بتوقيتك المحلي مباشرة + زر تحديث وتحديث تلقائي'),
+      t('whatsNew3', 'تصميم عالمي جديد متجاوب 100% على الهاتف والحاسوب'),
+      t('whatsNew4', 'لوحة أوامر سريعة Ctrl+K للتنقل الفوري بين كل الصفحات'),
+      t('whatsNew5', 'المكتبات أصبحت مدمجة داخل التطبيق — يعمل حتى مع شبكات ضعيفة')
+    ];
+    Swal.fire({
+      title: t('whatsNewTitle', 'جديد في الإصدار 4.1'),
+      html: '<div class="whats-new-list">' + items.map(i => '<div class="whats-new-item">✅ <span>' + i + '</span></div>').join('') + '</div>',
+      confirmButtonText: t('whatsNewOk', 'رائع، لنبدأ!'),
+      confirmButtonColor: '#10b981',
+      width: 480
+    });
+  } catch (_) {}
+}
+
 /* ---------- Main render ---------- */
 export async function renderDashboardPage() {
   destroyCharts();
@@ -323,16 +452,19 @@ export async function renderDashboardPage() {
 
   // Fetch dashboard data (parallel). Errors degrade gracefully.
   // Backend uses /api/reports/summary?from=&to= for any range.
+  // v4.1 — tz-aware ranges: from/to carry the device UTC offset and the
+  // backend groups per-day numbers in the SAME local calendar.
   const today = new Date();
   const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const sevenDaysAgo = new Date(today); sevenDaysAgo.setDate(today.getDate() - 6);
   sevenDaysAgo.setHours(0, 0, 0, 0);
 
-  const fmtDate = (d) => d.toISOString().slice(0, 10);
+  const tz = tzString();
+  const fmtDate = (d, endOfDay) => isoWithOffset(d, endOfDay);
 
   const [todayRes, weekRes, invRes, salesRes] = await Promise.allSettled([
-    apiFetch.get('/api/reports/summary', { from: fmtDate(startOfToday), to: fmtDate(today) }),
-    apiFetch.get('/api/reports/summary', { from: fmtDate(sevenDaysAgo), to: fmtDate(today) }),
+    apiFetch.get('/api/reports/summary', { from: fmtDate(startOfToday), to: fmtDate(today, true), tz }),
+    apiFetch.get('/api/reports/summary', { from: fmtDate(sevenDaysAgo), to: fmtDate(today, true), tz }),
     apiFetch.get('/api/inventory/summary'),
     apiFetch.get('/api/sales', { page: 1, limit: 100 })
   ]);
@@ -377,7 +509,7 @@ export async function renderDashboardPage() {
   }
   for (let i = 6; i >= 0; i--) {
     const d = new Date(today); d.setDate(today.getDate() - i);
-    const key = d.toISOString().slice(0, 10);
+    const key = isoDay(d); // v4.1 — local calendar day (matches backend tz grouping)
     labels.push(d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' }));
     const entry = dayMap[key];
     counts.push(entry ? (entry.count || 0) : 0);
@@ -409,6 +541,7 @@ export async function renderDashboardPage() {
   }
 
   content.innerHTML = `
+    ${renderDashToolbar()}
     ${renderStatCards(stats)}
 
     <div id="kpiExecutive"></div>
@@ -481,6 +614,16 @@ export async function renderDashboardPage() {
   renderSalesTrendChart(labels, counts, revenues);
   if (catLabels.length) renderCategoryDoughnut(catLabels, catData);
 
+  // v4.1 — animate the stat counters, wire the toolbar, stamp the time
+  const rawVals = [stats.totalProducts, stats.totalCustomers, stats.totalSalesToday, stats.totalRevenueToday];
+  const fmts = [fmtNum, fmtNum, fmtNum, fmtCurrency];
+  const valueEls = content.querySelectorAll('.stat-value[data-raw]');
+  valueEls.forEach((el, i) => { if (i < 4) animateValue(el, Number(rawVals[i]) || 0, fmts[i]); });
+  stampUpdatedAt();
+  wireDashToolbar();
+  manageAutoRefresh();
+  maybeShowWhatsNew();
+
   // v3 — Executive KPI section (async, degrades silently)
   loadExecutiveKpi();
 
@@ -502,7 +645,7 @@ async function loadExecutiveKpi() {
   const host = document.getElementById('kpiExecutive');
   if (!host) return;
   try {
-    const res = await apiFetch.get('/api/reports/kpi', { days: 30 });
+    const res = await apiFetch.get('/api/reports/kpi', { days: 30, tz: tzString() });
     const k = res.data || res;
     if (!k || !k.current) return;
     const delta = k.deltas || { revenuePct: 0, countPct: 0 };
@@ -596,6 +739,12 @@ function setupLiveRefresh() {
   _liveRefreshWired = true;
   // Event from sales module when a sale completes
   window.addEventListener('sale:completed', () => {
+    if (window.currentPage === 'dashboard') {
+      renderDashboardPage().catch(() => {});
+    }
+  });
+  // v4.1 — backend reachable again after an outage → refresh immediately
+  window.addEventListener('dzpos:api-online', () => {
     if (window.currentPage === 'dashboard') {
       renderDashboardPage().catch(() => {});
     }

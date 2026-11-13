@@ -20,8 +20,8 @@
     var o = '';
     try { o = localStorage.getItem('dzpos_api_base') || window.DZPOS_API_BASE || ''; } catch (e) {}
     if (o) return String(o).replace(/\/+$/, '');
-    if (location.protocol === 'file:') return 'https://dzpospro-production.up.railway.app';
-    if (/(^|\.)vercel\.app$/i.test(location.hostname || '')) return 'https://dzpospro-production.up.railway.app';
+    if (location.protocol === 'file:') return 'https://dzpospro-production-ec3f34a9.up.railway.app';
+    if (/(^|\.)vercel\.app$/i.test(location.hostname || '')) return 'https://dzpospro-production-ec3f34a9.up.railway.app';
     return '';
   })();
   
@@ -169,6 +169,33 @@ const res = await fetch(`${API_BASE}/api/auth/login`, {
     });
   }
 
+  /* ---------- v4.1 — real server status on the login page ----------
+   * The green dot used to be purely decorative; now it reflects a real
+   * probe against GET /api/health so users instantly see whether the
+   * backend is reachable (esp. on mobile networks).
+   */
+  async function probeServer() {
+    const dot = document.querySelector('.login-status-dot');
+    if (!dot) return false;
+    dot.classList.add('checking');
+    let ok = false;
+    try {
+      const ctrl = ('AbortController' in window) ? new AbortController() : null;
+      const tm = ctrl ? setTimeout(() => { try { ctrl.abort(); } catch (_) {} }, 5000) : null;
+      const res = await fetch(API_BASE + '/api/health?t=' + Date.now(), { cache: 'no-store', signal: ctrl ? ctrl.signal : undefined });
+      if (tm) clearTimeout(tm);
+      const j = await res.json().catch(() => null);
+      ok = res.ok && j && (j.success !== false);
+    } catch (_) { ok = false; }
+    dot.classList.remove('checking');
+    dot.classList.toggle('bad', !ok);
+    dot.classList.toggle('ok', ok);
+    dot.title = ok
+      ? (window.t ? window.t('connOnlineTitle', 'الخادم متصل ويعمل بشكل طبيعي') : 'Server online')
+      : (window.t ? window.t('connOfflineTitle', 'تعذّر الوصول إلى الخادم — اضغط لإعادة الفحص') : 'Server unreachable');
+    return ok;
+  }
+
   /* ---------- Init ---------- */
   document.addEventListener('DOMContentLoaded', () => {
     // Restore theme
@@ -214,6 +241,17 @@ const res = await fetch(`${API_BASE}/api/auth/login`, {
     if (registerLink) {
       registerLink.style.display = 'inline-block';
     }
+
+    // v4.1 — live server status (probe now, then every 30 s) + version chip
+    probeServer();
+    setInterval(() => { if (!document.hidden) probeServer(); }, 30000);
+    const dotEl = document.querySelector('.login-status-dot');
+    if (dotEl) {
+      dotEl.style.cursor = 'pointer';
+      dotEl.addEventListener('click', () => probeServer());
+    }
+    const verEl = document.querySelector('[data-i18n="version"]');
+    if (verEl) verEl.textContent = 'v4.1.0';
   });
 
   // Expose setTheme globally for any external caller

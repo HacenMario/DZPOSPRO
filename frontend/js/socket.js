@@ -19,8 +19,8 @@
     var o = '';
     try { o = localStorage.getItem('dzpos_api_base') || window.DZPOS_API_BASE || ''; } catch (e) {}
     if (o) return String(o).replace(/\/+$/, '');
-    if (location.protocol === 'file:') return 'https://dzpospro-production.up.railway.app';
-    if (/(^|\.)vercel\.app$/i.test(location.hostname || '')) return 'https://dzpospro-production.up.railway.app';
+    if (location.protocol === 'file:') return 'https://dzpospro-production-ec3f34a9.up.railway.app';
+    if (/(^|\.)vercel\.app$/i.test(location.hostname || '')) return 'https://dzpospro-production-ec3f34a9.up.railway.app';
     return '';
   })();
 

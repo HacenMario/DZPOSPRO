@@ -96,6 +96,28 @@ function isoDay(d) {
   return y + '-' + m + '-' + day;
 }
 
+/* ---------- v4.1 — local timezone helpers ----------
+ * Send full ISO timestamps WITH the device UTC offset, so the backend
+ * compares instants exactly and groups days in the merchant's calendar
+ * (fixes "today's sales show up on the wrong day / never update").
+ */
+function tzString() {
+  const off = -new Date().getTimezoneOffset();
+  const p = n => String(n).padStart(2, '0');
+  const sign = off >= 0 ? '+' : '-';
+  const abs = Math.abs(off);
+  return sign + p(Math.floor(abs / 60)) + ':' + p(abs % 60);
+}
+function rangeQuery() {
+  // state.from / state.to are local 'YYYY-MM-DD' strings
+  const tz = tzString();
+  return {
+    from: state.from + 'T00:00:00.000' + tz,
+    to: state.to + 'T23:59:59.999' + tz,
+    tz
+  };
+}
+
 /* Preset → {from, to} in ISO yyyy-mm-dd */
 function presetRange(preset) {
   const today = new Date();
@@ -264,6 +286,10 @@ function renderToolbar() {
         <button class="btn btn-primary btn-sm" id="reportApplyBtn" type="button">
           ${ICON.check}
           <span>${t('applyRange', 'Apply')}</span>
+        </button>
+        <button class="btn btn-secondary btn-sm" id="reportRefreshBtn" type="button" title="${t('dashRefresh', 'تحديث الآن')}">
+          ${ICON.refresh}
+          <span>${t('dashRefresh', 'تحديث الآن')}</span>
         </button>
         <button class="btn btn-secondary btn-sm" id="reportExportBtn" type="button">
           ${ICON.download}
@@ -691,7 +717,7 @@ function renderEmpty() {
 /* ---------- Fetch ---------- */
 async function fetchAll() {
   state.loading = true;
-  const qs = { from: state.from, to: state.to };
+  const qs = rangeQuery(); // v4.1 — offset-aware from/to + tz
   // v4 — trailing days for the chart pack endpoint (1..180)
   const packDays = Math.min(Math.max(Math.round((new Date(state.to) - new Date(state.from)) / 86400000) || 30, 1), 180);
   try {
@@ -701,7 +727,7 @@ async function fetchAll() {
       apiFetch.get('/api/reports/customers', Object.assign({ limit: 10 }, qs)).catch((e) => { console.warn('[reports] customers', e); return null; }),
       apiFetch.get('/api/reports/inventory', {}).catch((e) => { console.warn('[reports] inventory', e); return null; }),
       apiFetch.get('/api/settings').catch((e) => { console.warn('[reports] settings', e); return null; }),
-      apiFetch.get('/api/reports/charts', { days: packDays }).catch((e) => { console.warn('[reports] charts', e); return null; })
+      apiFetch.get('/api/reports/charts', { days: packDays, tz: qs.tz }).catch((e) => { console.warn('[reports] charts', e); return null; })
     ]);
 
     if (sum && sum.success) {
@@ -837,6 +863,13 @@ function bindToolbar() {
   });
 
   if (exp) exp.addEventListener('click', () => exportPDF());
+
+  // v4.1 — manual refresh button
+  const rbtn = document.getElementById('reportRefreshBtn');
+  if (rbtn) rbtn.addEventListener('click', async () => {
+    rbtn.disabled = true;
+    try { await refresh(); } finally { rbtn.disabled = false; }
+  });
 
   /* Clickable low-stock stat card */
   document.querySelectorAll('.stat-card[data-action="scroll-low-stock"]').forEach(el => {
@@ -1159,6 +1192,12 @@ function setupLiveRefresh() {
       if (lastSale > lastRender || Date.now() - lastRender > 15000) {
         refresh().catch(() => {});
       }
+    }
+  });
+  // v4.1 — backend reachable again after an outage → refresh immediately
+  window.addEventListener('dzpos:api-online', () => {
+    if (window.currentPage === 'reports') {
+      refresh().catch(() => {});
     }
   });
 }

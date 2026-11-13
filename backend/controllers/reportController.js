@@ -12,16 +12,41 @@ const parseRange = (query) => {
     const now = new Date();
     const from = query.from ? new Date(query.from) : new Date(now.getFullYear(), now.getMonth(), 1);
     let to = query.to ? new Date(query.to) : new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    // If `to` was provided as a date-only string (midnight), advance to end of that day
-    // so the $lt query includes the entire day.
-    if (query.to) {
-        const parsed = new Date(query.to);
-        if (parsed.getHours() === 0 && parsed.getMinutes() === 0 && parsed.getSeconds() === 0 && parsed.getMilliseconds() === 0) {
-            to = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), 23, 59, 59, 999);
-        }
+    // v4.1 — If `to` is a bare date string (YYYY-MM-DD, no time & no offset),
+    // extend to the END of that day in UTC so the $lt filter includes the whole
+    // day INDEPENDENTLY of the server timezone (the old check used
+    // server-local getHours() and silently broke on non-UTC hosts, which made
+    // "today" disappear from charts/stats after 00:00 local).
+    if (query.to && /^\d{4}-\d{2}-\d{2}$/.test(String(query.to).trim())) {
+        to = new Date(String(query.to).trim() + 'T23:59:59.999Z');
     }
     return { from, to };
 };
+
+/* ============================================================
+ * v4.1 — client timezone support
+ * The frontend sends `tz` as a UTC offset string (e.g. "+01:00"
+ * for Algeria). Day/hour groupings then match what the merchant
+ * sees on their device. Absent/invalid tz → UTC (old behaviour).
+ * ============================================================ */
+const TZ_RE = /^[+-]\d{2}:\d{2}$/;
+function tzMinutes(tz) {
+    if (!TZ_RE.test(tz || '')) return 0;
+    const sign = tz[0] === '-' ? -1 : 1;
+    return sign * (parseInt(tz.slice(1, 3), 10) * 60 + parseInt(tz.slice(4, 6), 10));
+}
+function tzOpt(req) {
+    const tz = String((req && req.query && req.query.tz) || '');
+    return TZ_RE.test(tz) ? tz : null;
+}
+// Day key (YYYY-MM-DD) of a Date shifted into the given tz offset (minutes).
+function dayKeyIn(date, minutes) {
+    return new Date(date.getTime() + minutes * 60000).toISOString().slice(0, 10);
+}
+function monthKeyIn(date, minutes) {
+    const d = new Date(date.getTime() + minutes * 60000);
+    return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0');
+}
 
 const productName = (p, lang) => {
     if (!p) return '';
@@ -35,6 +60,7 @@ const getSummary = async (req, res, next) => {
     try {
         const lang = req.lang || 'ar';
         const { from, to } = parseRange(req.query);
+        const tzMin = tzMinutes(tzOpt(req)); // v4.1 — group days in the client's timezone
 
         const [sales, totalProducts, totalCustomers, lowStockProducts] = await Promise.all([
             Sale.find({ saleDate: { $gte: from, $lt: to }, status: 'completed' })
@@ -84,10 +110,10 @@ const getSummary = async (req, res, next) => {
                 count: c.count
             }));
 
-        // Sales by day
+        // Sales by day — v4.1: keyed by the client's local calendar day
         const dayMap = {};
         sales.forEach(s => {
-            const d = s.saleDate.toISOString().slice(0, 10);
+            const d = dayKeyIn(s.saleDate, tzMin);
             if (!dayMap[d]) dayMap[d] = { date: d, count: 0, revenue: 0 };
             dayMap[d].count += 1;
             dayMap[d].revenue += s.total || 0;
@@ -100,9 +126,10 @@ const getSummary = async (req, res, next) => {
             if (!it.product) return;
             // populate category lazily — group by productId aggregation is expensive; keep simple
         }));
-        // For category breakdown, run an aggregation
+        // For category breakdown, run an aggregation (v4.1: + tenantScope so
+        // multi-store owners never see other stores' category revenue)
         const salesByCategoryAgg = await Sale.aggregate([
-            { $match: { saleDate: { $gte: from, $lt: to }, status: 'completed' } },
+            { $match: { saleDate: { $gte: from, $lt: to }, status: 'completed', ...tenantScope() } },
             { $lookup: { from: 'saleitems', localField: 'items', foreignField: '_id', as: 'items' } },
             { $unwind: '$items' },
             { $lookup: { from: 'products', localField: 'items.product', foreignField: '_id', as: 'product' } },
@@ -158,14 +185,14 @@ const getSalesReport = async (req, res, next) => {
         const lang = req.lang || 'ar';
         const { from, to } = parseRange(req.query);
         const groupBy = req.query.group_by === 'month' ? 'month' : 'day';
+        const tzMin = tzMinutes(tzOpt(req)); // v4.1
 
         const sales = await Sale.find({ saleDate: { $gte: from, $lt: to }, status: 'completed' });
         const buckets = {};
         sales.forEach(s => {
-            const d = s.saleDate;
             const key = groupBy === 'month'
-                ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-                : d.toISOString().slice(0, 10);
+                ? monthKeyIn(s.saleDate, tzMin)
+                : dayKeyIn(s.saleDate, tzMin);
             if (!buckets[key]) buckets[key] = { label: key, count: 0, revenue: 0 };
             buckets[key].count += 1;
             buckets[key].revenue += s.total || 0;
@@ -296,9 +323,22 @@ const getKpi = async (req, res, next) => {
     try {
         const lang = req.lang || 'ar';
         const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 7), 365);
+        const tz = tzOpt(req);            // v4.1 — client timezone offset
+        const tzMin = tzMinutes(tz);
+        const tzQ = tz ? { timezone: tz } : {}; // spread into $dateToString/$hour
         const since = new Date(Date.now() - days * 24 * 3600 * 1000);
         const prevSince = new Date(Date.now() - 2 * days * 24 * 3600 * 1000);
-        const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+        // v4.1 — "today" bucket must start at the CLIENT's local midnight
+        // (server-local midnight wrongly excluded sales made after 00:00
+        // local time when the server runs in UTC). No tz → legacy behaviour.
+        let todayStart;
+        if (tz) {
+            const shifted = new Date(Date.now() + tzMin * 60000);
+            shifted.setUTCHours(0, 0, 0, 0);
+            todayStart = new Date(shifted.getTime() - tzMin * 60000);
+        } else {
+            todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+        }
         const yStart = new Date(todayStart.getTime() - 24 * 3600 * 1000);
 
         const base = { status: { $nin: ['cancelled'] }, ...tenantScope() };
@@ -310,12 +350,12 @@ const getKpi = async (req, res, next) => {
             Sale.aggregate([{ $match: { ...base, saleDate: { $gte: yStart, $lt: todayStart } } }, { $group: { _id: null, revenue: { $sum: '$total' }, count: { $sum: 1 } } }]),
             Sale.aggregate([
                 { $match: { ...base, saleDate: { $gte: since } } },
-                { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$saleDate' } }, revenue: { $sum: '$total' }, count: { $sum: 1 } } },
+                { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$saleDate', ...tzQ } }, revenue: { $sum: '$total' }, count: { $sum: 1 } } },
                 { $sort: { _id: 1 } }
             ]),
             Sale.aggregate([
                 { $match: { ...base, saleDate: { $gte: since } } },
-                { $project: { hour: { $hour: '$saleDate' }, total: 1 } },
+                { $project: { hour: { $hour: { date: '$saleDate', ...tzQ } }, total: 1 } },
                 { $group: { _id: '$hour', revenue: { $sum: '$total' }, count: { $sum: 1 } } },
                 { $sort: { _id: 1 } }
             ]),
@@ -342,11 +382,11 @@ const getKpi = async (req, res, next) => {
         const revenueDelta = p.revenue > 0 ? ((c.revenue - p.revenue) / p.revenue) * 100 : (c.revenue > 0 ? 100 : 0);
         const countDelta = p.count > 0 ? ((c.count - p.count) / p.count) * 100 : (c.count > 0 ? 100 : 0);
 
-        // fill missing days in the series
+        // fill missing days in the series (v4.1: keys follow the client tz)
         const seriesMap = new Map(series.map(s => [s._id, s]));
         const fullSeries = [];
         for (let i = days - 1; i >= 0; i--) {
-            const d = new Date(Date.now() - i * 24 * 3600 * 1000).toISOString().slice(0, 10);
+            const d = dayKeyIn(new Date(Date.now() - i * 24 * 3600 * 1000), tzMin);
             const hit = seriesMap.get(d);
             fullSeries.push({ date: d, revenue: Math.round(((hit && hit.revenue) || 0) * 100) / 100, count: (hit && hit.count) || 0 });
         }
@@ -415,6 +455,8 @@ const getCharts = async (req, res, next) => {
     try {
         const lang = req.lang || 'ar';
         const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 1), 180);
+        const tz = tzOpt(req);            // v4.1 — client timezone offset
+        const tzQ = tz ? { timezone: tz } : {};
         const since = new Date(Date.now() - days * 24 * 3600 * 1000);
         const scope = tenantScope();
         const storeJoin = scope.storeId ? { '_s.storeId': scope.storeId } : {};
@@ -423,7 +465,7 @@ const getCharts = async (req, res, next) => {
             // revenue + count per day
             Sale.aggregate([
                 { $match: { status: { $nin: ['cancelled'] }, saleDate: { $gte: since }, ...scope } },
-                { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$saleDate' } }, revenue: { $sum: '$total' }, cost: { $sum: { $ifNull: ['$costTotal', 0] } }, count: { $sum: 1 } } },
+                { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$saleDate', ...tzQ } }, revenue: { $sum: '$total' }, cost: { $sum: { $ifNull: ['$costTotal', 0] } }, count: { $sum: 1 } } },
                 { $sort: { _id: 1 } }
             ]),
             // profit per day from items (costPrice at sale time)
@@ -431,7 +473,7 @@ const getCharts = async (req, res, next) => {
                 { $lookup: { from: 'sales', localField: 'sale', foreignField: '_id', as: '_s' } },
                 { $unwind: '$_s' },
                 { $match: { '_s.status': { $nin: ['cancelled'] }, '_s.saleDate': { $gte: since }, ...storeJoin } },
-                { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$_s.saleDate' } }, profit: { $sum: { $subtract: ['$total', { $multiply: ['$costPrice', '$quantity'] }] } } } }
+                { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$_s.saleDate', ...tzQ } }, profit: { $sum: { $subtract: ['$total', { $multiply: ['$costPrice', '$quantity'] }] } } } }
             ]),
             // category share by revenue
             SaleItem.aggregate([

@@ -19,8 +19,8 @@
     var o = '';
     try { o = localStorage.getItem('dzpos_api_base') || window.DZPOS_API_BASE || ''; } catch (e) {}
     if (o) return String(o).replace(/\/+$/, '');
-    if (location.protocol === 'file:') return 'https://dzpospro-production.up.railway.app';
-    if (/(^|\.)vercel\.app$/i.test(location.hostname || '')) return 'https://dzpospro-production.up.railway.app';
+    if (location.protocol === 'file:') return 'https://dzpospro-production-ec3f34a9.up.railway.app';
+    if (/(^|\.)vercel\.app$/i.test(location.hostname || '')) return 'https://dzpospro-production-ec3f34a9.up.railway.app';
     return '';
   })();
 
@@ -52,7 +52,54 @@
    * @param {object} options  Standard fetch options. `body` may be an object
    *                          (auto-serialized to JSON) or a string/FormData.
    * @returns {Promise<object>} Parsed JSON response.
+   *
+   * v4.1 hardening (mobile reliability):
+   *   • every request gets an AbortController timeout (FETCH_TIMEOUT_MS)
+   *     unless the caller passes its own `options.signal`
+   *   • GET requests are automatically retried once (GET_RETRY_DELAY_MS)
+   *     on network errors / 502-504 — kills the "dashboard empty on mobile
+   *     after one flaky request" class of failures
+   *   • global connection state: window.dzposApiOnline + the window events
+   *     'dzpos:api-offline' / 'dzpos:api-online' so the shell can flip the
+   *     connection chip and re-fetch data when the network comes back
    */
+  const FETCH_TIMEOUT_MS = 20000;
+  const GET_RETRY_DELAY_MS = 900;
+
+  function setApiOnline(on) {
+    if (global.dzposApiOnline === on) return;
+    global.dzposApiOnline = on;
+    try { global.dispatchEvent(new CustomEvent(on ? 'dzpos:api-online' : 'dzpos:api-offline')); } catch (_) {}
+  }
+  global.dzposApiOnline = true;
+  global.dzposSetApiOnline = setApiOnline;
+
+  async function rawFetch(fullUrl, options) {
+    const fetchOpts = Object.assign({}, options);
+    let ctrl = null, timer = null;
+    // v4.1 — enforce a hard timeout on every request unless the caller
+    // manages its own AbortSignal.
+    if (!fetchOpts.signal && typeof AbortController === 'function') {
+      ctrl = new AbortController();
+      fetchOpts.signal = ctrl.signal;
+      timer = setTimeout(function () { try { ctrl.abort(); } catch (_) {} }, FETCH_TIMEOUT_MS);
+    }
+    let res;
+    try {
+      res = await fetch(fullUrl, fetchOpts);
+      setApiOnline(true);
+    } catch (networkErr) {
+      // AbortError from our own timeout is a network failure too
+      setApiOnline(false);
+      throw networkErr;
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+    return res;
+  }
+
+  function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
   async function apiFetch(url, options) {
     options = options || {};
     const token = getToken();
@@ -74,15 +121,26 @@
     // ===== بناء URL كامل =====
     const fullUrl = url.startsWith('http') ? url : `${API_BASE}${url}`;
 
+    const isGet = !options.method || options.method.toUpperCase() === 'GET';
+    const attempts = isGet ? 2 : 1;
+
     let res;
-    try {
-      res = await fetch(fullUrl, Object.assign({}, options, { headers, body }));
-    } catch (networkErr) {
-      console.error('[apiFetch] network error:', networkErr);
-      if (typeof window.Toast === 'object' && window.Toast.error) {
-        window.Toast.error(t('networkError', 'لا يمكن الاتصال بالخادم'));
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        res = await rawFetch(fullUrl, Object.assign({}, options, { headers, body }));
+        break;
+      } catch (networkErr) {
+        const callerAborted = options.signal && networkErr && networkErr.name === 'AbortError';
+        if (attempt < attempts && !callerAborted) {
+          await delay(GET_RETRY_DELAY_MS);
+          continue;
+        }
+        console.error('[apiFetch] network error:', networkErr);
+        if (typeof window.Toast === 'object' && window.Toast.error) {
+          window.Toast.error(t('networkError', 'لا يمكن الاتصال بالخادم'));
+        }
+        throw networkErr;
       }
-      throw networkErr;
     }
 
     // 401 — session expired / not authenticated

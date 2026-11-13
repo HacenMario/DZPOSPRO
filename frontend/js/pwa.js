@@ -19,8 +19,8 @@
     var o = '';
     try { o = localStorage.getItem('dzpos_api_base') || window.DZPOS_API_BASE || ''; } catch (e) {}
     if (o) return String(o).replace(/\/+$/, '');
-    if (location.protocol === 'file:') return 'https://dzpospro-production.up.railway.app';
-    if (/(^|\.)vercel\.app$/i.test(location.hostname || '')) return 'https://dzpospro-production.up.railway.app';
+    if (location.protocol === 'file:') return 'https://dzpospro-production-ec3f34a9.up.railway.app';
+    if (/(^|\.)vercel\.app$/i.test(location.hostname || '')) return 'https://dzpospro-production-ec3f34a9.up.railway.app';
     return '';
   })();
   const SW_PATH = './sw.js';
@@ -36,12 +36,48 @@
   function t(key, fb) { return (typeof window.t === 'function') ? window.t(key, fb) : fb; }
 
   /* ---------- service worker ---------- */
+  let reloadedForNewSW = false;
+
   async function registerSW() {
     if (!('serviceWorker' in navigator)) return;
     try {
       swRegistration = await navigator.serviceWorker.register(SW_PATH, { scope: './' });
       console.log('[pwa] SW registered');
       navigator.serviceWorker.addEventListener('message', onSWMessage);
+
+      // ===== v4.1 — reliable update flow =====
+      // 1) If a NEW service worker is already waiting (e.g. the update was
+      //    downloaded while the tab was in the background), take it over
+      //    immediately and reload — the user never sees stale code.
+      // 2) When a new worker takes control ('controllerchange'), reload ONCE.
+      // 3) Re-check for updates whenever the tab becomes visible again.
+      if (swRegistration.waiting && navigator.serviceWorker.controller) {
+        swRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
+      }
+      swRegistration.addEventListener('updatefound', () => {
+        const nw = swRegistration.installing;
+        if (!nw) return;
+        nw.addEventListener('statechange', () => {
+          if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+            nw.postMessage({ type: 'SKIP_WAITING' });
+          }
+        });
+      });
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (reloadedForNewSW) return;
+        reloadedForNewSW = true;
+        try {
+          if (sessionStorage.getItem('dzpos_sw_reload') !== '1') {
+            sessionStorage.setItem('dzpos_sw_reload', '1');
+            window.location.reload();
+          }
+        } catch (_) { window.location.reload(); }
+      });
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && swRegistration) {
+          swRegistration.update().catch(() => {});
+        }
+      });
     } catch (err) {
       console.warn('[pwa] SW registration failed:', err.message);
     }
@@ -198,6 +234,8 @@
     global.addEventListener('online', () => {
       replayQueue();
     });
+    // v4.1 — the api.js layer detected that the backend is reachable again
+    global.addEventListener('dzpos:api-online', () => { replayQueue(); });
     global.addEventListener('offlinequeue:changed', updateSyncChip);
     global.addEventListener('offlinequeue:replay', updateSyncChip);
 

@@ -34,7 +34,9 @@
     if (!SUPPORTED.includes(lang)) lang = 'ar';
     if (translations[lang]) return translations[lang];
     try {
-      const res = await fetch('/lang/' + lang + '.json', { cache: 'no-cache' });
+      // v4.1 — RELATIVE path (was '/lang/…' which breaks when the app is
+      // served from a sub-path or opened through the Railway origin).
+      const res = await fetch('lang/' + lang + '.json', { cache: 'no-cache' });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       translations[lang] = await res.json();
       return translations[lang];

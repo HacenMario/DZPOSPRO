@@ -1,22 +1,28 @@
 /* ============================================================
- * sw.js — DZ POS PRO Service Worker (v3)
+ * sw.js — DZ POS PRO Service Worker (v4.1)
  * ------------------------------------------------------------
- * Offline-first PWA:
- *   • Precached app shell (pages, css, js, icons, vendor libs)
- *   • Cache-first for static assets + CDN libraries (after first use)
- *   • Network-first for navigations → offline fallback page
- *   • API GET requests: network-first with cache fallback (read-only
- *     data stays visible offline); API writes are queued by the app
- *     (IndexedDB) and replayed when back online — see js/pwa.js
- *   • Web Push (VAPID) handling: notifications show even when the
- *     app is closed / screen is off (installed PWA)
+ * Offline-first PWA, rebuilt around one rule:
+ *   THE USER ALWAYS GETS THE DEPLOYED VERSION WHEN ONLINE.
+ *
+ *   • App shell (HTML/CSS/JS/lang) → NETWORK-FIRST with cache
+ *     fallback. (v4.0 served the cached copy first — after every
+ *     update, phones kept running the OLD code from cache until a
+ *     second reload, which showed empty dashboards + "Offline".)
+ *   • API GET → network-first with a 2-minute freshness cap: a
+ *     cached response is only used while offline AND only if it is
+ *     fresh, so statistics can never go stale.
+ *   • /socket.io requests bypass the SW completely (caching polling
+ *     responses breaks realtime on flaky mobile networks).
+ *   • Icons/vendor/CDN libs → cache-first (immutable).
+ *   • Web Push (VAPID) + Background Sync unchanged.
  * ============================================================ */
 
-const VERSION = 'v4.0.0';
+const VERSION = 'v4.1.0';
 const SHELL_CACHE = `dzpos-shell-${VERSION}`;
 const STATIC_CACHE = `dzpos-static-${VERSION}`;
 const API_CACHE = `dzpos-api-${VERSION}`;
 const OFFLINE_URL = 'offline.html';
+const API_CACHE_MAX_AGE_MS = 120000; // cached API data never older than 2 min
 
 const SHELL_ASSETS = [
     './',
@@ -30,6 +36,7 @@ const SHELL_ASSETS = [
     './css/theme-light.css',
     './css/theme-dark.css',
     './css/features.css',
+    './css/upgrade.css',
     './js/config.js',
     './js/toast.js',
     './js/api.js',
@@ -41,6 +48,7 @@ const SHELL_ASSETS = [
     './js/notify.js',
     './js/exporter.js',
     './js/receipt.js',
+    './js/commandPalette.js',
     './js/app.js',
     './js/dashboard.js',
     './js/modules/dashboard.js',
@@ -62,6 +70,11 @@ const SHELL_ASSETS = [
     './js/modules/ai.js',
     './js/modules/audit.js',
     './js/modules/platform.js',
+    './vendor/sweetalert2.min.js',
+    './vendor/chart.umd.min.js',
+    './vendor/jspdf.umd.min.js',
+    './vendor/jspdf.plugin.autotable.min.js',
+    './vendor/socket.io.min.js',
     './vendor/xlsx.full.min.js',
     './lang/ar.json',
     './lang/en.json',
@@ -87,7 +100,7 @@ self.addEventListener('install', (event) => {
     );
 });
 
-/* ---------- activate: clean old caches ---------- */
+/* ---------- activate: clean every old cache ---------- */
 self.addEventListener('activate', (event) => {
     event.waitUntil(
         caches.keys().then(keys => Promise.all(
@@ -97,41 +110,66 @@ self.addEventListener('activate', (event) => {
     );
 });
 
-/* ---------- fetch strategies ---------- */
-self.addEventListener('fetch', (event) => {
-    const req = event.request;
-    const url = new URL(req.url);
+/* ---------- helpers ---------- */
+function isAppShell(req, url) {
+    if (url.origin !== self.location.origin) return false;
+    if (req.mode === 'navigate') return true;
+    const p = url.pathname;
+    return p.endsWith('.html') || p.endsWith('.css') || p.endsWith('.js') ||
+           p.includes('/lang/') || p.endsWith('manifest.json');
+}
 
-    // Only GET is cacheable — everything else passes through
-    if (req.method !== 'GET') return;
-
-    // API requests (same-origin /api or the Railway backend /api)
-    if (url.pathname.startsWith('/api') || url.pathname.includes('/api/')) {
-        if (url.pathname.includes('/api/auth') || url.pathname.includes('/api/ai')) return; // never cache
-        event.respondWith(networkFirst(req, API_CACHE));
-        return;
-    }
-
-    // Same-origin static + cross-origin CDN libs → cache-first (stale-while-revalidate)
-    event.respondWith(staleWhileRevalidate(req, STATIC_CACHE));
-});
-
-async function networkFirst(req, cacheName) {
+/* ---------- strategies ---------- */
+// API GET: network-first, cached fallback capped at 2 minutes.
+async function apiNetworkFirst(req, cacheName) {
     const cache = await caches.open(cacheName);
     try {
         const fresh = await fetch(req);
         if (fresh && fresh.ok && fresh.type !== 'opaque') {
-            cache.put(req, fresh.clone()).catch(() => {});
+            try {
+                const body = await fresh.clone().arrayBuffer();
+                const headers = new Headers(fresh.headers);
+                headers.set('x-dzpos-cached-at', String(Date.now()));
+                await cache.put(req, new Response(body, {
+                    status: fresh.status, statusText: fresh.statusText, headers
+                }));
+            } catch (_) { /* cache write is best-effort */ }
         }
         return fresh;
     } catch (err) {
         const cached = await cache.match(req, { ignoreVary: true });
-        if (cached) return cached;
+        if (cached) {
+            const at = Number(cached.headers.get('x-dzpos-cached-at') || 0);
+            if (at && (Date.now() - at) < API_CACHE_MAX_AGE_MS) return cached;
+            // stale → still better than nothing? NO — stale stats caused the
+            // "charts never update" bug. Only serve cache when it is fresh;
+            // otherwise surface the offline envelope so the UI can show a
+            // proper "no connection" state instead of old numbers.
+        }
         return new Response(JSON.stringify({ success: false, offline: true, message: 'OFFLINE' }),
             { status: 503, headers: { 'Content-Type': 'application/json' } });
     }
 }
 
+// App shell / app code: ALWAYS the network copy when online.
+async function shellNetworkFirst(req) {
+    const cache = await caches.open(SHELL_CACHE);
+    try {
+        const fresh = await fetch(req);
+        if (fresh && fresh.ok) cache.put(req, fresh.clone()).catch(() => {});
+        return fresh;
+    } catch (_) {
+        const cached = await cache.match(req, { ignoreVary: true });
+        if (cached) return cached;
+        if (req.mode === 'navigate') {
+            const shell = await caches.open(SHELL_CACHE);
+            return (await shell.match(OFFLINE_URL)) || Response.error();
+        }
+        return Response.error();
+    }
+}
+
+// Icons / vendor / CDN: cache-first with background refresh.
 async function staleWhileRevalidate(req, cacheName) {
     const cache = await caches.open(cacheName);
     const cached = await cache.match(req, { ignoreVary: true });
@@ -143,14 +181,44 @@ async function staleWhileRevalidate(req, cacheName) {
     }).catch(() => null);
     if (cached) return cached;
     try { return await network; } catch (_) {
-        // navigations fall back to the offline page
         if (req.mode === 'navigate') {
             const shell = await caches.open(SHELL_CACHE);
-            return (await shell.match(OFFLINE_URL)) || (await shell.match('./dashboard.html')) || Response.error();
+            return (await shell.match(OFFLINE_URL)) || Response.error();
         }
         return Response.error();
     }
 }
+
+/* ---------- fetch strategies ---------- */
+self.addEventListener('fetch', (event) => {
+    const req = event.request;
+    if (req.method !== 'GET') return;
+    let url;
+    try { url = new URL(req.url); } catch (_) { return; }
+
+    // v4.1 — socket.io must never be intercepted (cached polling responses
+    // break realtime reconnects, especially on mobile networks).
+    if (url.pathname.startsWith('/socket.io')) return;
+
+    // API requests (same-origin /api or the Railway backend /api)
+    if (url.pathname.startsWith('/api') || url.pathname.includes('/api/')) {
+        if (url.pathname.includes('/api/auth') || url.pathname.includes('/api/ai')) return; // never cache
+        // v4.1 — never cache the health probe: a cached "ok" would make the
+        // connection chip report ONLINE while offline (false positive).
+        if (url.pathname.includes('/api/health')) return;
+        event.respondWith(apiNetworkFirst(req, API_CACHE));
+        return;
+    }
+
+    // App shell + app code → network-first (fresh code every load)
+    if (isAppShell(req, url)) {
+        event.respondWith(shellNetworkFirst(req));
+        return;
+    }
+
+    // Same-origin static + cross-origin CDN libs → cache-first (SWR)
+    event.respondWith(staleWhileRevalidate(req, STATIC_CACHE));
+});
 
 /* ---------- Web Push (works in background / screen off / closed app) ---------- */
 self.addEventListener('push', (event) => {

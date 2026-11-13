@@ -1,0 +1,519 @@
+/* ============================================================
+   DZ POS PRO — upgrade.css (v4.1 "Aurora" design layer)
+   ------------------------------------------------------------
+   Loaded LAST on every page. Adds the world-class visual layer
+   on top of the existing component library WITHOUT touching any
+   existing behaviour:
+     • Aurora login page (animated gradient blobs + glass card)
+     • Gradient buttons / stat icons / nav pills
+     • Real connection chip + retry banner states
+     • Dashboard toolbar (last update / auto refresh)
+     • Command palette (Ctrl+K)
+     • What's-new modal list
+     • Bulletproof responsive + overflow guards (320px → 4K)
+     • Dark-theme variants for everything new
+   ============================================================ */
+
+/* ---------- global overflow hardening ---------- */
+html, body { overflow-x: clip; }
+.main-area, .content-area, #pageContent { min-width: 0; }
+.card, .stat-card, .kpi-exec-card, .kpi-card, .ticket-card { min-width: 0; }
+img, svg, canvas, video, iframe { max-width: 100%; }
+
+/* ============ 1. LOGIN PAGE — Aurora ============ */
+.login-page { position: relative; }
+
+.form-panel { isolation: isolate; }
+.form-panel::before,
+.form-panel::after {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  border-radius: 50%;
+  filter: blur(70px);
+  opacity: .5;
+  pointer-events: none;
+}
+.form-panel::before {
+  width: 420px; height: 420px;
+  top: -120px; inset-inline-end: -120px;
+  background: radial-gradient(circle, rgba(16,185,129,.45), transparent 65%);
+  animation: auroraFloat1 14s ease-in-out infinite alternate;
+}
+.form-panel::after {
+  width: 380px; height: 380px;
+  bottom: -110px; inset-inline-start: -110px;
+  background: radial-gradient(circle, rgba(6,182,212,.35), transparent 65%);
+  animation: auroraFloat2 17s ease-in-out infinite alternate;
+}
+@keyframes auroraFloat1 {
+  from { transform: translate(0, 0) scale(1); }
+  to   { transform: translate(-40px, 50px) scale(1.12); }
+}
+@keyframes auroraFloat2 {
+  from { transform: translate(0, 0) scale(1); }
+  to   { transform: translate(45px, -40px) scale(1.08); }
+}
+
+.login-card {
+  position: relative;
+  background: var(--bg-card); /* fallback for browsers without color-mix */
+  background: color-mix(in srgb, var(--bg-card, #fff) 82%, transparent);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow:
+    0 1px 0 rgba(255,255,255,.6) inset,
+    0 24px 60px -18px rgba(15, 23, 42, .18),
+    0 8px 24px -12px rgba(15, 23, 42, .12);
+}
+[data-theme="dark"] .login-card { background: rgba(17, 24, 39, .82); }
+
+/* gradient sheen on the login button */
+.btn-login { position: relative; overflow: hidden; }
+.btn-login::after {
+  content: "";
+  position: absolute; inset: 0;
+  background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,.25) 50%, transparent 70%);
+  transform: translateX(-120%);
+  transition: none;
+  pointer-events: none;
+}
+.btn-login:hover:not(:disabled)::after { animation: sheen 0.9s ease; }
+@keyframes sheen { to { transform: translateX(120%); } }
+
+/* brand panel: richer depth */
+.brand-panel {
+  background:
+    radial-gradient(circle at 15% 15%, rgba(255,255,255,.14), transparent 40%),
+    radial-gradient(circle at 85% 85%, rgba(6,182,212,.30), transparent 45%),
+    radial-gradient(circle at 80% 20%, rgba(245,158,11,.22), transparent 40%),
+    linear-gradient(135deg, #047857 0%, #10b981 52%, #0ea372 100%);
+}
+.brand-feature { transition: background var(--transition), transform var(--transition); }
+.brand-feature:hover { background: rgba(255,255,255,.15); transform: translateY(-2px); }
+
+/* login status dot: now real (v4.1) */
+.login-status-dot.ok { background: var(--success); }
+.login-status-dot.bad { background: var(--danger); animation: none; }
+.login-status-dot.checking { background: var(--warning); }
+
+/* ============ 2. APP SHELL — sidebar + topbar ============ */
+.sidebar {
+  box-shadow: 1px 0 0 var(--border-subtle);
+}
+[data-theme="dark"] .sidebar { box-shadow: 1px 0 0 rgba(255,255,255,.04); }
+
+.sidebar-logo .logo-mark {
+  background: linear-gradient(135deg, #10b981 0%, #059669 60%, #047857 100%);
+  box-shadow: 0 6px 16px -4px rgba(16, 185, 129, .5);
+}
+
+.nav-item {
+  border-radius: 12px;
+  margin-inline: 2px;
+}
+.nav-item.active {
+  background: linear-gradient(135deg, rgba(16,185,129,.16), rgba(16,185,129,.05));
+  box-shadow: inset 0 0 0 1px rgba(16,185,129,.22);
+  color: var(--primary-dark);
+}
+[data-theme="dark"] .nav-item.active { color: var(--primary); }
+.nav-item.active::before {
+  width: 4px; height: 26px;
+  border-radius: 999px;
+  inset-inline-start: -8px;
+  box-shadow: 0 0 10px rgba(16,185,129,.65);
+}
+.nav-item.active .nav-icon {
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  box-shadow: 0 4px 10px rgba(var(--primary-rgb), .4);
+}
+.nav-item:hover .nav-icon { transform: translateY(-1px); }
+
+.topbar {
+  box-shadow: 0 1px 0 var(--border-color), 0 6px 20px -14px rgba(15,23,42,.25);
+}
+
+/* ---- v4.1 connection chip (topbar) ---- */
+.conn-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: box-shadow .2s ease, border-color .2s ease;
+  white-space: nowrap;
+}
+.conn-chip:hover { border-color: var(--border-strong); box-shadow: 0 2px 10px rgba(15,23,42,.08); }
+.conn-dot {
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: var(--warning);
+  flex-shrink: 0;
+  position: relative;
+}
+.conn-chip.conn-online .conn-dot { background: var(--success); box-shadow: 0 0 0 3px rgba(34,197,94,.18); }
+.conn-chip.conn-online { color: #047857; border-color: rgba(34,197,94,.35); }
+[data-theme="dark"] .conn-chip.conn-online { color: #34d399; }
+.conn-chip.conn-offline .conn-dot { background: var(--danger); box-shadow: 0 0 0 3px rgba(239,68,68,.18); }
+.conn-chip.conn-offline { color: #b91c1c; border-color: rgba(239,68,68,.4); }
+[data-theme="dark"] .conn-chip.conn-offline { color: #f87171; }
+.conn-chip.conn-checking .conn-dot::after {
+  content: "";
+  position: absolute; inset: -3px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top-color: var(--warning);
+  animation: connSpin .8s linear infinite;
+}
+@keyframes connSpin { to { transform: rotate(360deg); } }
+
+/* ---- offline banner (v4.1 states + retry) ---- */
+.offline-banner {
+  background: linear-gradient(90deg, rgba(239,68,68,.12), rgba(239,68,68,.05));
+  color: #b91c1c;
+  border-bottom: 1px solid rgba(239,68,68,.3);
+}
+[data-theme="dark"] .offline-banner { color: #fca5a5; }
+.offline-banner.is-checking {
+  background: linear-gradient(90deg, rgba(245,158,11,.12), rgba(245,158,11,.05));
+  color: #b45309;
+  border-bottom-color: rgba(245,158,11,.35);
+}
+[data-theme="dark"] .offline-banner.is-checking { color: #fcd34d; }
+.offline-banner #offlineBannerMsg { flex: 1; min-width: 0; }
+.conn-retry {
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all .18s ease;
+  white-space: nowrap;
+}
+.conn-retry:hover { background: rgba(0,0,0,.06); }
+[data-theme="dark"] .conn-retry:hover { background: rgba(255,255,255,.1); }
+
+/* ============ 3. CARDS / STATS / BUTTONS ============ */
+.card {
+  border-radius: 16px;
+  box-shadow: var(--shadow-sm);
+}
+.stat-card {
+  border-radius: 16px;
+  transition: transform .22s cubic-bezier(.2,.9,.3,1.2), box-shadow .22s ease;
+}
+.stat-card:hover { transform: translateY(-3px); box-shadow: 0 14px 34px -14px rgba(15,23,42,.22); }
+.stat-card::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0; top: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--primary), rgba(6,182,212,.9));
+  opacity: 0;
+  transition: opacity .25s ease;
+}
+.stat-card:hover::before { opacity: 1; }
+.stat-icon {
+  border-radius: 14px;
+}
+.stat-icon.green { background: linear-gradient(135deg, #10b981, #047857); }
+.stat-icon.cyan  { background: linear-gradient(135deg, #06b6d4, #0891b2); }
+.stat-icon.amber { background: linear-gradient(135deg, #f59e0b, #d97706); }
+.stat-icon.red   { background: linear-gradient(135deg, #ef4444, #dc2626); }
+
+.btn-primary {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  box-shadow: 0 4px 14px -4px rgba(16,185,129,.55);
+}
+.btn-primary:hover:not(:disabled) { box-shadow: 0 8px 20px -6px rgba(16,185,129,.6); transform: translateY(-1px); }
+.btn { border-radius: 12px; }
+.icon-btn { border-radius: 12px; }
+
+/* dashboard page cards entrance */
+#pageContent .card { animation: cardUp .38s cubic-bezier(.16,1,.3,1) both; }
+@keyframes cardUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ============ 4. DASHBOARD TOOLBAR (refresh / auto / stamp) ============ */
+.dash-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+  padding: 0.6rem 0.9rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+}
+.dash-updated {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  min-width: 0;
+}
+.dash-updated svg { width: 15px; height: 15px; color: var(--primary); flex-shrink: 0; }
+.dash-updated strong { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.dash-toolbar-actions { display: inline-flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.dash-auto-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.dash-auto-toggle input {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 34px; height: 19px;
+  border-radius: 999px;
+  background: var(--border-strong);
+  position: relative;
+  cursor: pointer;
+  transition: background .2s ease;
+  flex-shrink: 0;
+}
+.dash-auto-toggle input::before {
+  content: "";
+  position: absolute;
+  top: 2.5px; inset-inline-start: 2.5px;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,.3);
+  transition: transform .2s cubic-bezier(.4,0,.2,1);
+}
+[dir="rtl"] .dash-auto-toggle input::before { inset-inline-start: auto; inset-inline-end: 2.5px; }
+.dash-auto-toggle input:checked { background: var(--primary); }
+.dash-auto-toggle input:checked::before { transform: translateX(15px); }
+[dir="rtl"] .dash-auto-toggle input:checked::before { transform: translateX(-15px); }
+
+/* ============ 5. WHAT'S NEW MODAL ============ */
+.whats-new-list { display: flex; flex-direction: column; gap: 10px; text-align: start; padding: 6px 2px 2px; }
+.whats-new-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #374151;
+}
+[data-theme="dark"] .whats-new-item { color: #e5e7eb; }
+.swal2-popup { border-radius: 18px !important; }
+
+/* ============ 6. COMMAND PALETTE (Ctrl+K) ============ */
+.cp-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  background: rgba(15, 23, 42, .45);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 12vh 16px 16px;
+  opacity: 0;
+  transition: opacity .18s ease;
+}
+.cp-overlay.open { opacity: 1; }
+.cp-panel {
+  width: 100%;
+  max-width: 560px;
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--border-color);
+  border-radius: 18px;
+  box-shadow: 0 30px 80px -20px rgba(15,23,42,.45), 0 8px 24px rgba(15,23,42,.15);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transform: translateY(-8px) scale(.98);
+  transition: transform .18s cubic-bezier(.16,1,.3,1);
+}
+.cp-overlay.open .cp-panel { transform: none; }
+.cp-input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+.cp-search-icon svg { width: 18px; height: 18px; color: var(--text-muted); display: block; }
+.cp-input {
+  flex: 1;
+  min-width: 0;
+  border: none !important;
+  background: transparent !important;
+  font-size: 1rem;
+  color: var(--text-primary);
+  outline: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  height: auto !important;
+}
+.cp-input::placeholder { color: var(--text-muted); }
+.cp-esc {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 2px 7px;
+  letter-spacing: .5px;
+  flex-shrink: 0;
+}
+.cp-list {
+  max-height: 46vh;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cp-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: .92rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: start;
+  transition: background .14s ease;
+}
+.cp-item.active { background: rgba(16,185,129,.12); color: var(--primary-dark); }
+[data-theme="dark"] .cp-item.active { color: var(--primary); }
+.cp-item-icon {
+  width: 32px; height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+.cp-item.active .cp-item-icon { background: var(--primary); color: #fff; box-shadow: 0 3px 10px rgba(16,185,129,.4); }
+.cp-item-icon svg { width: 16px; height: 16px; }
+.cp-item-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-item-hint {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: var(--bg-hover);
+  border-radius: 999px;
+  padding: 2px 8px;
+  flex-shrink: 0;
+}
+.cp-empty { padding: 28px 16px; text-align: center; color: var(--text-muted); font-size: .9rem; }
+.cp-foot {
+  padding: 9px 14px;
+  border-top: 1px solid var(--border-color);
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* ============ 7. DARK THEME VARIANTS ============ */
+[data-theme="dark"] .conn-chip { background: #111827; border-color: #374151; }
+[data-theme="dark"] .conn-chip.conn-online { background: rgba(16,185,129,.1); }
+[data-theme="dark"] .conn-chip.conn-offline { background: rgba(239,68,68,.12); }
+[data-theme="dark"] .dash-toolbar { background: #111827; }
+[data-theme="dark"] .cp-overlay { background: rgba(2, 6, 23, .6); }
+[data-theme="dark"] .cp-panel { background: #111827; border-color: #374151; }
+[data-theme="dark"] .cp-item { color: #e5e7eb; }
+[data-theme="dark"] .cp-item-icon { background: #1f2937; color: #cbd5e1; }
+[data-theme="dark"] .cp-item-hint { background: #1f2937; }
+[data-theme="dark"] .conn-retry:hover { background: rgba(255,255,255,.08); }
+
+/* ============ 8. LANGUAGE SWITCHER FALLBACK GUARD ============
+   features.css owns the real styles; these two lines guarantee that even
+   if features.css ever fails to load, the dropdown menu stays hidden and
+   the button stays presentable (the v4.0 "all flags exploded on the login
+   page" bug can never happen again). */
+.lang-menu { display: none; }
+.lang-switcher.open .lang-menu { display: flex; }
+.lang-switcher-btn { border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary); border-radius: 12px; }
+.lang-switcher-login .lang-switcher-btn { height: 42px; }
+[data-theme="dark"] .lang-switcher-btn { background: #111827; border-color: #374151; color: #e5e7eb; }
+
+/* ============ 9. RESPONSIVE HARDENING (the guarantees) ============ */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .content-area { padding-bottom: calc(1rem + env(safe-area-inset-bottom)); }
+  .install-banner { bottom: calc(18px + env(safe-area-inset-bottom)); }
+}
+
+@media (max-width: 900px) {
+  .cp-overlay { padding-top: 8vh; }
+}
+
+@media (max-width: 768px) {
+  /* condense the topbar: dot-only connection chip, keep every control */
+  .conn-chip .conn-label { display: none; }
+  .conn-chip { padding: 0 8px; height: 36px; }
+  .dash-toolbar { padding: 0.55rem 0.7rem; gap: 0.5rem; }
+  .dash-toolbar .btn span { display: none; }
+  .dash-toolbar .btn { padding: 0.45rem 0.6rem; }
+  /* bottom sheets instead of floating modals */
+  .cp-panel { max-height: 82vh; max-height: 82dvh; }
+  .cp-list { max-height: 52vh; max-height: 52dvh; }
+  /* touch targets */
+  .table-action-btn { width: 34px; height: 34px; }
+}
+
+@media (max-width: 480px) {
+  .form-panel::before { width: 300px; height: 300px; }
+  .form-panel::after { width: 260px; height: 260px; }
+  .dash-auto-toggle span { display: none; }
+  .cp-overlay { padding: 8px; align-items: flex-end; }
+  .cp-panel { border-radius: 18px 18px 14px 14px; }
+  .page-actions .btn { min-width: 0; }
+  .stat-value { font-size: 1.05rem; }
+  .conn-chip { height: 34px; }
+}
+
+@media (max-width: 360px) {
+  .icon-btn { width: 32px; height: 32px; }
+  .conn-chip { height: 32px; padding: 0 7px; }
+  .dash-updated { font-size: 0.74rem; }
+}
+
+/* keep POS usable one-handed: bigger buttons only inside the POS page */
+@media (max-width: 768px) {
+  #pageContent .btn:has(svg) { min-height: 38px; }
+}
+
+/* ============ 10. REDUCED MOTION ============ */
+@media (prefers-reduced-motion: reduce) {
+  .form-panel::before, .form-panel::after { animation: none; }
+  .btn-login::after { display: none; }
+  #pageContent .card { animation: none; }
+  .stat-card, .btn-primary { transition: none; }
+}
