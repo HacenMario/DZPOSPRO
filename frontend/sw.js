@@ -17,7 +17,7 @@
  *   • Web Push (VAPID) + Background Sync unchanged.
  * ============================================================ */
 
-const VERSION = 'v4.3.0';
+const VERSION = 'v4.3.1';
 const SHELL_CACHE = `dzpos-shell-${VERSION}`;
 const STATIC_CACHE = `dzpos-static-${VERSION}`;
 const API_CACHE = `dzpos-api-${VERSION}`;

@@ -1229,5 +1229,18 @@
   "subKpiPendingSub": "confirmar pago luego aprobar",
   "subRevenueChart": "Ingresos recaudados — últimos 12 meses (DZD)",
   "subPlanDistChart": "Distribución de tiendas por plan",
-  "subExpiringTitle": "Suscripciones por vencer"
+  "subExpiringTitle": "Suscripciones por vencer",
+  "subPlatformTitle": "Suscripciones de tiendas",
+  "subPlatformSubtitle": "Visión completa de la suscripción de cada tienda — elige una para ver los detalles.",
+  "subStoresTotal": "Tiendas totales",
+  "subNeedsAttention": "Requieren atención",
+  "subStopped": "Detenidas",
+  "subPendingCount": "Solicitudes pendientes",
+  "subStoreSearch": "Buscar por nombre…",
+  "subNoMatch": "Sin coincidencias",
+  "subPlatformEmpty": "Aún no hay tiendas",
+  "subPickStore": "Ver detalles",
+  "subPlatformFocusBanner": "Estás viendo la suscripción de una tienda desde la cuenta de plataforma — las solicitudes las envía la tienda, con control total desde la pestaña Plataforma.",
+  "subBackToStores": "Todas las tiendas",
+  "subPlatformManagedCta": "Gestionado por la plataforma"
 }

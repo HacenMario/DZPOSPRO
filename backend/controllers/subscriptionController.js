@@ -110,11 +110,79 @@ async function applyPlanToStore(store, { plan, cycle, months, source }) {
 
 /* ================= STORE SIDE ================= */
 
+// v4.3.1 — platform view payload for the super-admin (no store focus):
+// every store with its live subscription state, newest pending requests
+// first. Powers the store picker on the subscription page.
+async function platformStoreList() {
+    const [stores, pendingReqs] = await Promise.all([
+        Store.find({}).select('name plan status billingCycle subscriptionStart subscriptionEndsAt trialEndsAt limits planSource planChangedAt createdAt').sort({ name: 1 }).lean(),
+        SubscriptionRequest.find({ status: 'pending' }).sort({ createdAt: -1 }).limit(200).lean()
+    ]);
+    const pendingByStore = new Map();
+    for (const r of pendingReqs) {
+        const key = String(r.storeId);
+        if (!pendingByStore.has(key)) pendingByStore.set(key, r);
+    }
+    return stores.map(s => {
+        const plain = { ...s, status: s.status || 'active' };
+        const pending = pendingByStore.get(String(s._id)) || null;
+        return {
+            id: s._id,
+            name: s.name,
+            status: s.status || 'active',
+            plan: s.plan,
+            billingCycle: s.billingCycle || null,
+            subscriptionStart: s.subscriptionStart || null,
+            subscriptionEndsAt: s.subscriptionEndsAt || null,
+            trialEndsAt: s.trialEndsAt || null,
+            state: computeState(plain),
+            daysLeft: daysLeftOf(plain),
+            pending: pending
+                ? { id: pending._id, type: pending.type, requestedPlan: pending.requestedPlan,
+                    billingCycle: pending.billingCycle, amount: pending.amount,
+                    paymentMethod: pending.paymentMethod, createdAt: pending.createdAt }
+                : null,
+            createdAt: s.createdAt || null
+        };
+    });
+}
+
 // GET /api/subscription — everything the store's admin needs on one page.
+// v4.3.1 — role-aware:
+//   • super-admin WITHOUT focus  → 200 { isPlatform: true, stores: [...] }
+//     (the frontend renders the all-stores picker — no more 400)
+//   • super-admin WITH focus     → that store's full detail (isPlatformFocus)
+//   • store user without storeId (legacy single-store) → the only store
+//     when the platform has exactly one, otherwise a clear 400
 const getMySubscription = async (req, res, next) => {
     try {
-        const storeId = req.storeFocus || req.storeId;
-        if (!storeId) return errorResponse(res, 400, getTranslation('missingFields', req.lang || 'ar'));
+        const lang = req.lang || 'ar';
+        let storeId = req.storeFocus || req.storeId;
+
+        const isSuper = req.userRole === 'superadmin' || (req.user && req.user.role === 'superadmin');
+        if (!storeId && isSuper) {
+            // platform owner browsing all stores
+            const stores = await platformStoreList();
+            return successResponse(res, {
+                isPlatform: true,
+                isPlatformFocus: false,
+                stores,
+                catalog: plans.publicCatalog(),
+                currency: plans.CURRENCY
+            });
+        }
+
+        if (!storeId) {
+            // legacy account (no storeId): fall back to the single store when
+            // the platform hosts exactly one — mirrors the tenant plugin's
+            // single-store compatibility mode.
+            const count = await Store.countDocuments({});
+            if (count === 1) {
+                const only = await Store.findOne({}).select('_id').lean();
+                if (only) storeId = only._id;
+            }
+        }
+        if (!storeId) return errorResponse(res, 400, getTranslation('missingFields', lang));
         const store = await Store.findById(storeId).lean();
         if (!store) return errorResponse(res, 404, getTranslation('storeNotFound', req.lang || 'ar'));
 
@@ -137,6 +205,8 @@ const getMySubscription = async (req, res, next) => {
         const currentPlan = catalog.find(p => p.key === store.plan) || null;
 
         return successResponse(res, {
+            isPlatform: false,
+            isPlatformFocus: !!isSuper,
             store: {
                 id: store._id, name: store.name, plan: store.plan, status: store.status,
                 billingCycle: store.billingCycle || null,
@@ -164,6 +234,8 @@ const getMySubscription = async (req, res, next) => {
 const listMyRequests = async (req, res, next) => {
     try {
         const storeId = req.storeFocus || req.storeId;
+        const isSuper = req.userRole === 'superadmin' || (req.user && req.user.role === 'superadmin');
+        if (!storeId && isSuper) return successResponse(res, { isPlatform: true, data: [], total: 0 });
         if (!storeId) return errorResponse(res, 400, getTranslation('missingFields', req.lang || 'ar'));
         const requests = await SubscriptionRequest.find({ storeId })
             .sort({ createdAt: -1 }).limit(100).lean();

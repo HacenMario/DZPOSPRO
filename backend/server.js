@@ -380,11 +380,20 @@ const shutdown = async (signal) => {
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('unhandledRejection', (reason) => {
-    logger.error('Unhandled promise rejection:', reason);
+    logger.error('Unhandled promise rejection:', reason && reason.message ? reason.message : String(reason));
 });
+// v4.3.1 — hard cap on uncaught-exception logging. A persistently broken
+// stdout (EPIPE from a closed pipe) used to trigger an INFINITE loop here:
+// logging the exception itself threw another EPIPE → logged again →
+// multi-GB log files within minutes. Max 20 entries, then silent (the
+// process keeps serving).
+let uncaughtLogged = 0;
 process.on('uncaughtException', (err) => {
-    logger.error('Uncaught exception:', err.message);
-    logger.error(err.stack || '');
+    uncaughtLogged++;
+    if (uncaughtLogged <= 20) {
+        logger.error('Uncaught exception:', err && err.message ? err.message : String(err));
+        if (err && err.stack) logger.error(err.stack);
+    }
 });
 
 module.exports = app;

@@ -1229,5 +1229,18 @@
   "subKpiPendingSub": "تأكيد الدفع ثم الموافقة",
   "subRevenueChart": "الإيراد المحصّل — آخر 12 شهراً (DZD)",
   "subPlanDistChart": "توزيع المخازن على الخطط",
-  "subExpiringTitle": "اشتراكات تنتهي قريباً"
+  "subExpiringTitle": "اشتراكات تنتهي قريباً",
+  "subPlatformTitle": "اشتراكات المتاجر",
+  "subPlatformSubtitle": "نظرة شاملة على اشتراكات كل المتاجر — اختر متجراً لعرض تفاصيله الكاملة.",
+  "subStoresTotal": "إجمالي المتاجر",
+  "subNeedsAttention": "يحتاج متابعة",
+  "subStopped": "متوقف",
+  "subPendingCount": "طلبات معلّقة",
+  "subStoreSearch": "بحث باسم المتجر…",
+  "subNoMatch": "لا نتائج مطابقة للبحث",
+  "subPlatformEmpty": "لا توجد متاجر مسجلة بعد",
+  "subPickStore": "عرض التفاصيل",
+  "subPlatformFocusBanner": "أنت تعرض اشتراك متجر من حساب المنصة — طلبات التغيير تُرسل من طرف المتجر نفسه، ولديك التحكم الكامل من تبويب المنصة.",
+  "subBackToStores": "كل المتاجر",
+  "subPlatformManagedCta": "يُدار من المنصة"
 }

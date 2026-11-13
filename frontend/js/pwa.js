@@ -100,7 +100,22 @@
     }
   }
 
-  const EXPECTED_SW_VERSION = 'v4.2.0';
+  // v4.3.1 — the expected worker version comes from config.js (ONE source of
+  // truth, bumped every release). This used to be a hardcoded 'v4.2.0' that
+  // was NEVER updated: since v4.2.1 the check treated the CURRENT worker as
+  // "stale" on every load and unregistered it + deleted its caches —
+  // which silently KILLED Web Push notifications in the background.
+  function expectedSWVersion() {
+    try {
+      var v = (window.DZPOS_VERSION || '').toString().trim();
+      if (v) return v.charAt(0).toLowerCase() === 'v' ? v.slice(1) : v;
+    } catch (_) {}
+    return '4.3.1';
+  }
+  function normVersion(v) {
+    var s = String(v || '').trim().toLowerCase();
+    return s.charAt(0) === 'v' ? s.slice(1) : s;
+  }
   let swVersionChecked = false;
 
   function verifySWVersion(registration) {
@@ -112,8 +127,8 @@
     chan.port1.onmessage = (ev) => {
       settled = true;
       const v = ev && ev.data && ev.data.version;
-      if (v && v !== EXPECTED_SW_VERSION) {
-        console.warn('[pwa] stale SW detected (' + v + ' ≠ ' + EXPECTED_SW_VERSION + ') → unregister + reload');
+      if (v && normVersion(v) !== expectedSWVersion()) {
+        console.warn('[pwa] stale SW detected (' + v + ' ≠ ' + expectedSWVersion() + ') → unregister + reload');
         unregisterStaleWorkers(true);
       }
     };
@@ -128,8 +143,9 @@
       const regs = await navigator.serviceWorker.getRegistrations();
       for (const r of regs) { try { await r.unregister(); } catch (_) {} }
       if ('caches' in window) {
+        const cur = expectedSWVersion();
         const keys = await caches.keys();
-        await Promise.all(keys.filter(k => k.indexOf('v4.2.0') === -1 && k.startsWith('dzpos-')).map(k => caches.delete(k)));
+        await Promise.all(keys.filter(k => k.startsWith('dzpos-') && k.indexOf(cur) === -1).map(k => caches.delete(k)));
       }
     } catch (_) {}
     if (reload && sessionStorage.getItem('dzpos_sw_purge') !== '1') {
@@ -144,7 +160,7 @@
     }
     if (event.data && event.data.type === 'VERSION') {
       // handled via MessageChannel in verifySWVersion; kept for completeness
-      if (event.data.version && event.data.version !== EXPECTED_SW_VERSION) unregisterStaleWorkers(true);
+      if (event.data.version && normVersion(event.data.version) !== expectedSWVersion()) unregisterStaleWorkers(true);
     }
   }
 
@@ -179,38 +195,35 @@
     return arr;
   }
 
-  async function enablePush(silent) {
+  // v4.3.1 — applicationServerKey of an existing subscription, base64url.
+  // Comparing it with the SERVER's current VAPID public key detects the
+  // classic "push silently stopped after a server redeploy / DB reset"
+  // (new keys → every old subscription gets 403 forever, browser keeps it).
+  function subAppServerKeyB64(sub) {
     try {
-      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-        if (!silent) toast('warning', t('pushUnsupported', 'إشعارات الهاتف غير مدعومة في هذا المتصفح'));
-        return false;
-      }
-      if (!swRegistration) swRegistration = await navigator.serviceWorker.register(SW_PATH, { scope: './' });
+      const raw = sub && sub.options && sub.options.applicationServerKey;
+      if (!raw) return '';
+      const bytes = raw instanceof ArrayBuffer ? new Uint8Array(raw) : new Uint8Array(raw.buffer || raw);
+      let s = '';
+      for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+      return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    } catch (_) { return ''; }
+  }
 
-      const permission = await Notification.requestPermission();
-      if (permission !== 'granted') {
-        if (!silent) toast('warning', t('pushDenied', 'تم رفض صلاحية الإشعارات — فعّلها من إعدادات المتصفح'));
-        return false;
-      }
+  async function fetchServerPublicKey() {
+    const keyRes = await fetch(API_BASE() + '/api/push/public-key', langFetchOpts());
+    const keyJson = await keyRes.json();
+    return (keyJson && keyJson.data && keyJson.data.publicKey) || null;
+  }
 
-      const token = localStorage.getItem('token');
-      if (!token) return false;
-
-      const keyRes = await fetch(API_BASE() + '/api/push/public-key', langFetchOpts());
-      const keyJson = await keyRes.json();
-      const publicKey = keyJson && keyJson.data && keyJson.data.publicKey;
-      if (!publicKey) { if (!silent) toast('error', t('pushServerUnavailable', 'خدمة الإشعارات غير مهيأة على الخادم')); return false; }
-
-      const existing = await swRegistration.pushManager.getSubscription();
-      let sub = existing;
-      if (!sub) {
-        sub = await swRegistration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(publicKey)
-        });
-      }
-
-      const subJson = sub.toJSON();
+  // v4.3.1 — send the CURRENT subscription to the server (upsert). Keeping
+  // the server DB in sync on every dashboard visit is what makes push work
+  // "always, even in the background": a device that re-subscribed (new SW,
+  // re-install, key rotation) is re-registered without any user action.
+  async function pushSubscribeToServer(subJson) {
+    const token = localStorage.getItem('token');
+    if (!token || !subJson || !subJson.endpoint) return;
+    try {
       await fetch(API_BASE() + '/api/push/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
@@ -221,6 +234,59 @@
                   : /iPhone|iPad/i.test(navigator.userAgent) ? 'iOS' : 'Desktop'
         })
       });
+    } catch (_) {}
+  }
+
+  async function enablePush(silent) {
+    try {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        if (!silent) toast('warning', t('pushUnsupported', 'إشعارات الهاتف غير مدعومة في هذا المتصفح'));
+        return false;
+      }
+      if (!swRegistration) swRegistration = await navigator.serviceWorker.register(SW_PATH, { scope: './' });
+      // v4.3.1 — make sure the worker is ACTIVE before subscribing: a
+      // subscription created on an "installing" worker is lost when the
+      // worker takes over (classic "enabled once, then never again").
+      if (swRegistration.active == null && swRegistration.installing) {
+        await new Promise((resolve) => {
+          const w = swRegistration.installing;
+          w.addEventListener('statechange', () => { if (w.state === 'activated') resolve(); });
+          setTimeout(resolve, 4000);
+        });
+      }
+
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        if (!silent) toast('warning', t('pushDenied', 'تم رفض صلاحية الإشعارات — فعّلها من إعدادات المتصفح'));
+        return false;
+      }
+
+      const token = localStorage.getItem('token');
+      if (!token) return false;
+
+      const publicKey = await fetchServerPublicKey();
+      if (!publicKey) { if (!silent) toast('error', t('pushServerUnavailable', 'خدمة الإشعارات غير مهيأة على الخادم')); return false; }
+      const wantKey = urlBase64ToUint8Array(publicKey);
+
+      const existing = await swRegistration.pushManager.getSubscription();
+      let sub = existing;
+      // v4.3.1 — heal a stale/mismatched subscription instead of keeping a
+      // dead one: different VAPID key → unsubscribe + subscribe fresh.
+      if (sub) {
+        const curKey = subAppServerKeyB64(sub);
+        if (curKey && curKey !== publicKey) {
+          try { await sub.unsubscribe(); } catch (_) {}
+          sub = null;
+        }
+      }
+      if (!sub) {
+        sub = await swRegistration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: wantKey
+        });
+      }
+
+      await pushSubscribeToServer(sub.toJSON());
       if (!silent) toast('success', t('pushEnabled', 'تم تفعيل إشعارات الهاتف ✓ تعمل حتى لو كان التطبيق مغلقاً'));
       return true;
     } catch (err) {
@@ -259,15 +325,52 @@
     });
   }
 
-  /* ---------- auto-enable push for logged-in dashboard users ---------- */
-  async function autoInitPush() {
+  /* ---------- auto-keep push alive for logged-in dashboard users ----------
+   * v4.3.1 — this is the "notifications ALWAYS work" contract:
+   *   • no subscription              → silent re-subscribe
+   *   • subscription w/ old VAPID key → unsubscribe + fresh subscribe
+   *   • healthy subscription          → re-POST to the server (upsert) so the
+   *     backend always has the device, even after a Railway DB reset
+   * Runs on every dashboard load, when the tab becomes visible again, and
+   * every 30 minutes while the app is open. All failures stay silent — the
+   * user never gets spammed; the next run simply retries.
+   */
+  let pushHealthBusy = false;
+  async function keepPushAlive() {
     if (!location.pathname.includes('dashboard.html')) return;
     if (!localStorage.getItem('token')) return;
+    if (pushHealthBusy) return;
+    pushHealthBusy = true;
     try {
-      const reg = await navigator.serviceWorker.getRegistration();
-      const sub = reg && await reg.pushManager.getSubscription();
-      if (!sub) await enablePush(true); // silent subscribe on first dashboard visit
-    } catch (_) {}
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+      if (!swRegistration) swRegistration = await navigator.serviceWorker.register(SW_PATH, { scope: './' });
+      if (typeof Notification !== 'undefined' && Notification.permission !== 'granted') return; // never nag; the settings toggle asks explicitly
+
+      const publicKey = await fetchServerPublicKey();
+      if (!publicKey) return;
+
+      let sub = await swRegistration.pushManager.getSubscription();
+      if (sub) {
+        const curKey = subAppServerKeyB64(sub);
+        if (curKey && curKey !== publicKey) {
+          try { await sub.unsubscribe(); } catch (_) {}
+          sub = null;
+        }
+      }
+      if (!sub) {
+        try {
+          sub = await swRegistration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(publicKey)
+          });
+        } catch (_) { return; } // subscribe can throw when the browser blocks silent push — settings toggle still works
+      }
+      await pushSubscribeToServer(sub.toJSON());
+    } catch (_) {
+      // silent — retried on the next visibility/interval tick
+    } finally {
+      pushHealthBusy = false;
+    }
   }
 
   function isStandalone() {
@@ -282,7 +385,12 @@
     }
 
     await registerSW();
-    autoInitPush();
+    keepPushAlive();
+
+    // v4.3.1 — keep push healthy whenever the app is used again or every
+    // 30 min: heals key rotation, re-registers re-subscribed devices.
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) keepPushAlive(); });
+    setInterval(keepPushAlive, 30 * 60 * 1000);
 
     global.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
@@ -302,5 +410,5 @@
     setInterval(replayQueue, 60000);
   });
 
-  global.DZPWA = { enablePush, replayQueue, isStandalone, updateSyncChip };
+  global.DZPWA = { enablePush, replayQueue, isStandalone, updateSyncChip, keepPushAlive };
 })(window);

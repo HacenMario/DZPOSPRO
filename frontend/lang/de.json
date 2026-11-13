@@ -1229,5 +1229,18 @@
   "subKpiPendingSub": "Zahlung bestätigen, dann genehmigen",
   "subRevenueChart": "Eingenommener Umsatz — letzte 12 Monate (DZD)",
   "subPlanDistChart": "Shop-Planverteilung",
-  "subExpiringTitle": "Bald ablaufende Abonnements"
+  "subExpiringTitle": "Bald ablaufende Abonnements",
+  "subPlatformTitle": "Shop-Abonnements",
+  "subPlatformSubtitle": "Vollständige Übersicht aller Shop-Abonnements — Shop wählen für alle Details.",
+  "subStoresTotal": "Shops gesamt",
+  "subNeedsAttention": "Aufmerksam nötig",
+  "subStopped": "Gestoppt",
+  "subPendingCount": "Offene Anfragen",
+  "subStoreSearch": "Nach Shopname suchen…",
+  "subNoMatch": "Keine Treffer",
+  "subPlatformEmpty": "Noch keine Shops registriert",
+  "subPickStore": "Details ansehen",
+  "subPlatformFocusBanner": "Sie sehen das Abonnement eines Shops aus dem Plattform-Konto — Änderungsanfragen kommen vom Shop, volle Kontrolle im Plattform-Tab.",
+  "subBackToStores": "Alle Shops",
+  "subPlatformManagedCta": "Von der Plattform verwaltet"
 }

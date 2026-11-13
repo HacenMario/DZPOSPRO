@@ -171,6 +171,14 @@
   global.dzposApiProbe = probe;
   global.DZPOS_API_BASE = resolved; // back-compat snapshot (never used as live value)
 
+  // v4.3.1 — ONE source of truth for the app version. pwa.js compares the
+  // RUNNING service worker's version against this: a mismatch means a stale
+  // worker → unregister + reload. Keeping it here (instead of a hardcoded
+  // constant in pwa.js) makes the check correct in EVERY future release and
+  // fixes the v4.2.0 hardcode that silently unregistered the CURRENT worker
+  // on every load — which killed Web Push notifications in the background.
+  global.DZPOS_VERSION = '4.3.1';
+
   // Kick off the first resolution as soon as possible (non-blocking).
   if (typeof Promise !== 'undefined') {
     try { resolveApiBase({ verify: true }); } catch (e) { /* noop */ }

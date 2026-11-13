@@ -48,7 +48,7 @@ const tenantMiddleware = (req, res, next) => {
         // for the store's own team — while keeping full platform rights.
         const focus = (req.get('X-Store-Id') || req.query.storeId || '').toString().trim();
         if (focus && mongoose.Types.ObjectId.isValid(focus)) {
-            req.storeId = mongoose.Types.ObjectId(focus);
+            req.storeId = new mongoose.Types.ObjectId(focus); // v4.3.1: new — ObjectId() without new throws in mongoose 7
             req.isSuper = true;
             req.storeFocus = req.storeId;
             return runWithTenant({ storeId: req.storeId, isSuper: true }, () => next());

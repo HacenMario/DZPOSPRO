@@ -1229,5 +1229,18 @@
   "subKpiPendingSub": "conferma pagamento poi approva",
   "subRevenueChart": "Ricavi raccolti — ultimi 12 mesi (DZD)",
   "subPlanDistChart": "Distribuzione negozi per piano",
-  "subExpiringTitle": "Abbonamenti in scadenza"
+  "subExpiringTitle": "Abbonamenti in scadenza",
+  "subPlatformTitle": "Abbonamenti dei negozi",
+  "subPlatformSubtitle": "Panoramica completa degli abbonamenti di ogni negozio — scegli un negozio per i dettagli.",
+  "subStoresTotal": "Negozi totali",
+  "subNeedsAttention": "Da controllare",
+  "subStopped": "Fermati",
+  "subPendingCount": "Richieste in sospeso",
+  "subStoreSearch": "Cerca per nome…",
+  "subNoMatch": "Nessun risultato",
+  "subPlatformEmpty": "Nessun negozio registrato",
+  "subPickStore": "Vedi dettagli",
+  "subPlatformFocusBanner": "Stai visualizzando l’abbonamento di un negozio dall’account piattaforma — le richieste arrivano dal negozio, controllo completo nella scheda Piattaforma.",
+  "subBackToStores": "Tutti i negozi",
+  "subPlatformManagedCta": "Gestito dalla piattaforma"
 }

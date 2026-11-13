@@ -1229,5 +1229,18 @@
   "subKpiPendingSub": "confirmer le paiement puis approuver",
   "subRevenueChart": "Revenu collecté — 12 derniers mois (DZD)",
   "subPlanDistChart": "Répartition des magasins par plan",
-  "subExpiringTitle": "Abonnements expirant bientôt"
+  "subExpiringTitle": "Abonnements expirant bientôt",
+  "subPlatformTitle": "Abonnements des magasins",
+  "subPlatformSubtitle": "Vue d’ensemble de l’abonnement de chaque magasin — choisissez un magasin pour tous les détails.",
+  "subStoresTotal": "Total magasins",
+  "subNeedsAttention": "À surveiller",
+  "subStopped": "À l’arrêt",
+  "subPendingCount": "Demandes en attente",
+  "subStoreSearch": "Rechercher par nom…",
+  "subNoMatch": "Aucun résultat",
+  "subPlatformEmpty": "Aucun magasin enregistré",
+  "subPickStore": "Voir les détails",
+  "subPlatformFocusBanner": "Vous consultez l’abonnement d’un magasin depuis le compte plateforme — les demandes viennent du magasin, et vous gardez le contrôle total depuis l’onglet Plateforme.",
+  "subBackToStores": "Tous les magasins",
+  "subPlatformManagedCta": "Géré par la plateforme"
 }

@@ -1229,5 +1229,18 @@
   "subKpiPendingSub": "confirm payment then approve",
   "subRevenueChart": "Collected revenue — last 12 months (DZD)",
   "subPlanDistChart": "Store plan distribution",
-  "subExpiringTitle": "Subscriptions expiring soon"
+  "subExpiringTitle": "Subscriptions expiring soon",
+  "subPlatformTitle": "Stores subscriptions",
+  "subPlatformSubtitle": "A complete overview of every store's subscription — pick a store to see its full details.",
+  "subStoresTotal": "Total stores",
+  "subNeedsAttention": "Needs attention",
+  "subStopped": "Stopped",
+  "subPendingCount": "Pending requests",
+  "subStoreSearch": "Search by store name…",
+  "subNoMatch": "No matching results",
+  "subPlatformEmpty": "No stores registered yet",
+  "subPickStore": "View details",
+  "subPlatformFocusBanner": "You are viewing a store's subscription from the platform account — change requests are sent by the store itself, and you have full control from the Platform tab.",
+  "subBackToStores": "All stores",
+  "subPlatformManagedCta": "Managed by platform"
 }

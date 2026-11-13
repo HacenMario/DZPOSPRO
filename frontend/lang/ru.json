@@ -1229,5 +1229,18 @@
   "subKpiPendingSub": "подтвердить оплату и одобрить",
   "subRevenueChart": "Собранная выручка — последние 12 месяцев (DZD)",
   "subPlanDistChart": "Распределение магазинов по тарифам",
-  "subExpiringTitle": "Подписки, истекающие скоро"
+  "subExpiringTitle": "Подписки, истекающие скоро",
+  "subPlatformTitle": "Подписки магазинов",
+  "subPlatformSubtitle": "Полный обзор подписок всех магазинов — выберите магазин для подробностей.",
+  "subStoresTotal": "Всего магазинов",
+  "subNeedsAttention": "Требуют внимания",
+  "subStopped": "Остановлены",
+  "subPendingCount": "Ожидающие запросы",
+  "subStoreSearch": "Поиск по названию…",
+  "subNoMatch": "Нет совпадений",
+  "subPlatformEmpty": "Магазинов пока нет",
+  "subPickStore": "Подробнее",
+  "subPlatformFocusBanner": "Вы просматриваете подписку магазина из аккаунта платформы — запросы отправляет сам магазин, полный контроль доступен на вкладке Платформа.",
+  "subBackToStores": "Все магазины",
+  "subPlatformManagedCta": "Управляется платформой"
 }

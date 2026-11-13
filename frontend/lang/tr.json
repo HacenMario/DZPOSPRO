@@ -1229,5 +1229,18 @@
   "subKpiPendingSub": "ödemeyi onayla, sonra onayla",
   "subRevenueChart": "Tahsil edilen gelir — son 12 ay (DZD)",
   "subPlanDistChart": "Mağaza plan dağılımı",
-  "subExpiringTitle": "Yakında biten abonelikler"
+  "subExpiringTitle": "Yakında biten abonelikler",
+  "subPlatformTitle": "Mağaza abonelikleri",
+  "subPlatformSubtitle": "Tüm mağazaların aboneliklerine genel bakış — tam detaylar için bir mağaza seçin.",
+  "subStoresTotal": "Toplam mağaza",
+  "subNeedsAttention": "İlgi gerekli",
+  "subStopped": "Durdu",
+  "subPendingCount": "Bekleyen talepler",
+  "subStoreSearch": "Mağaza adıyla ara…",
+  "subNoMatch": "Eşleşme yok",
+  "subPlatformEmpty": "Henüz mağaza yok",
+  "subPickStore": "Detayları gör",
+  "subPlatformFocusBanner": "Mağaza aboneliğini platform hesabından görüyorsunuz — talepler mağaza tarafından gönderilir, tam kontrol Platform sekmesinde.",
+  "subBackToStores": "Tüm mağazalar",
+  "subPlatformManagedCta": "Platform tarafından yönetilir"
 }

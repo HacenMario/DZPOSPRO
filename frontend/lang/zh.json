@@ -1229,5 +1229,18 @@
   "subKpiPendingSub": "确认付款后批准",
   "subRevenueChart": "已收收入 — 近12个月 (DZD)",
   "subPlanDistChart": "商店套餐分布",
-  "subExpiringTitle": "即将到期的订阅"
+  "subExpiringTitle": "即将到期的订阅",
+  "subPlatformTitle": "店铺订阅",
+  "subPlatformSubtitle": "所有店铺订阅的完整概览 — 选择店铺查看全部详情。",
+  "subStoresTotal": "店铺总数",
+  "subNeedsAttention": "需要关注",
+  "subStopped": "已停止",
+  "subPendingCount": "待处理申请",
+  "subStoreSearch": "按店铺名称搜索…",
+  "subNoMatch": "无匹配结果",
+  "subPlatformEmpty": "尚无注册店铺",
+  "subPickStore": "查看详情",
+  "subPlatformFocusBanner": "您正从平台账户查看店铺订阅 — 变更申请由店铺发起，完整控制请使用平台标签页。",
+  "subBackToStores": "所有店铺",
+  "subPlatformManagedCta": "由平台管理"
 }

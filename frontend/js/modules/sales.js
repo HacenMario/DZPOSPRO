@@ -1115,6 +1115,15 @@ const POS_CSS = `
   .pos-product-price { font-size: 0.95rem; }
   .pos-grid { gap: 0.55rem; padding: 0.75rem; }
 }
+/* ---- v4.3.1 — POS 320px guard: long product names must NEVER inflate the
+   grid tracks past the viewport (measured 48px overflow on 320px phones —
+   the reported "تجاوز لطار الشاشة"). minmax(0,1fr) + min-width:0 let the
+   clamped name shrink instead of widening the column. ---- */
+.pos-grid { min-width: 0; max-width: 100%; }
+@media (max-width: 640px) { .pos-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.pos-grid > * { min-width: 0; max-width: 100%; }
+.pos-product { min-width: 0; overflow: hidden; }
+.pos-product-name { max-width: 100%; overflow-wrap: anywhere; word-break: break-word; }
 .pos-product .pos-add-hint {
   position: absolute;
   top: 0.45rem;

@@ -47,7 +47,16 @@ async function getPublicKey() {
 }
 
 /**
- * Send one push. Returns true on success; removes stale subscriptions (404/410).
+ * Send one push. Returns true on success; removes stale subscriptions.
+ * v4.3.1 — cleanup covers EVERY permanent failure, not only 404/410:
+ *   404/410 → subscription gone (expired/uninstalled)
+ *   401     → VAPID auth rejected (keys rotated on the server)
+ *   403     → registration no longer valid / sender mismatch (permanent)
+ *   400     → malformed subscription (invalid keys)
+ * Keeping those rows alive made every future broadcast waste time on
+ * doomed endpoints — a real part of "notifications stopped working".
+ * Transient failures (429 rate-limit, 5xx, network) are retried later and
+ * the subscription is kept.
  */
 async function sendToSubscription(sub, payload) {
     await ensureVapidKeys();
@@ -61,9 +70,10 @@ async function sendToSubscription(sub, payload) {
         return true;
     } catch (err) {
         const status = err.statusCode;
-        if (status === 404 || status === 410) {
-            // subscription expired — clean up
+        if ([400, 401, 403, 404, 410].includes(status)) {
+            // permanently dead subscription — clean up so it never blocks again
             PushSubscription.deleteOne({ _id: sub._id }).catch(() => {});
+            logger.info(`Push subscription removed (${status}): ${String(sub.endpoint).slice(0, 60)}`);
         } else {
             logger.warn(`Push to ${String(sub.endpoint).slice(0, 60)} failed: ${status || ''} ${err.message}`);
         }

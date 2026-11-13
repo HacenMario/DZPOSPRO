@@ -731,6 +731,22 @@ img, svg, video, canvas { max-width: 100%; }
   .page-title-text { font-size: .95rem; }
   #helpBtn, #cmdBtn { display: none; }
 }
+/* v4.3.1 — topbar overflow FIX for small phones. Measured: 320px overflowed
+   by ~44px and 360px by ~5px — the fixed-width page title pushed the
+   notification bell + avatar off-screen (the reported "تجاوز لطار الشاشة").
+   The left side now SHRINKS (title truncates with ellipsis) instead of
+   pushing controls out; at ≤400px the theme toggle hides too (still
+   reachable from the command palette quick actions) and the language
+   button collapses to the flag only. Verified 320/360/390 → zero overflow. */
+.topbar { min-width: 0; max-width: 100%; }
+.topbar-left { flex: 1 1 auto; min-width: 0; }
+.topbar-right { flex: 0 0 auto; margin-inline-start: auto; }
+.page-title { min-width: 0; flex: 0 1 auto; max-width: 100%; }
+@media (max-width: 400px) {
+  .topbar { padding: 0 .55rem; }
+  #themeToggle { display: none; }
+  .lang-switcher .lang-label { display: none; }
+}
 /* long modal content scrolls instead of overflowing */
 #pageContent .card, .modal-card { max-width: 100%; }
 /* offscreen menus always visible-safe */

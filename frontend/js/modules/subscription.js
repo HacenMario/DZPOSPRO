@@ -1,5 +1,5 @@
 /* ============================================================
- * js/modules/subscription.js — Store subscription center (v4.3)
+ * js/modules/subscription.js — Store subscription center (v4.3 / v4.3.1)
  * ------------------------------------------------------------
  * The store's admin sees everything about its subscription:
  *   • hero status: plan, state, period, days-left progress, usage
@@ -8,6 +8,13 @@
  *   • "request change / subscribe / renew" flow → the super-admin
  *     confirms the payment, then the plan is applied automatically
  *   • full request + payment history
+ *
+ * v4.3.1 — the PLATFORM OWNER can open this page too:
+ *   • without focus → all-stores picker (name, plan, state, days left,
+ *     pending request badge, search box)
+ *   • picking a store loads its FULL detail via X-Store-Id (store focus)
+ *     with a "back to all stores" button — no more "Required fields
+ *     are missing" error
  * Exports: renderSubscriptionPage({ apiBase })
  * ============================================================ */
 
@@ -18,10 +25,13 @@ export async function renderSubscriptionPage(ctx) {
   const lang = (typeof window.currentLang !== 'undefined' && window.currentLang) || 'ar';
   const apiBase = (ctx && ctx.apiBase) || window.DZPOS_API_BASE || '';
   const me = (function () { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch (_) { return {}; } })();
-  const canRequest = ['admin', 'manager'].includes(me.role || '');
+  const isSuperAdmin = (me.role || '') === 'superadmin';
+  const canRequest = ['admin', 'manager'].includes(me.role || '') && !isSuperAdmin;
 
-  let data = null;
   let cycleView = 'monthly';
+  // v4.3.1 — super-admin store focus (persisted between re-renders)
+  let focusId = (isSuperAdmin && window.dzposSubFocusId) ? String(window.dzposSubFocusId) : '';
+  if (!isSuperAdmin) focusId = '';
 
   const fmtMoney = (n) => Number(n || 0).toLocaleString('en-US');
   const fmtDate = (d) => {
@@ -67,16 +77,109 @@ export async function renderSubscriptionPage(ctx) {
   const lbl = (map, k) => { const m = map[k]; return m ? t(m.key, m.fb) : (k || '—'); };
 
   /* ---------- load ---------- */
+  async function fetchView() {
+    const headers = focusId ? { 'X-Store-Id': focusId } : {};
+    const res = await apiFetch('/api/subscription', { method: 'GET', cache: 'no-store', headers });
+    return res.data || res;
+  }
+
   content.innerHTML = `<div class="loading-state"><div class="spinner"></div></div>`;
+  let data = null;
   try {
-    const res = await apiFetch.get('/api/subscription');
-    data = res.data || res;
+    data = await fetchView();
   } catch (err) {
     content.innerHTML = `<div class="empty-state"><div class="empty-title">⛔ ${esc(err.message)}</div>
       <div class="empty-action"><button class="btn btn-secondary btn-sm" onclick="window.loadPage('subscription')">${t('retry', 'إعادة المحاولة')}</button></div></div>`;
     return;
   }
 
+  /* ============================================================
+   * v4.3.1 — PLATFORM VIEW (super-admin, no store focus)
+   * ============================================================ */
+  if (data.isPlatform) {
+    window.dzposSubFocusId = '';
+    const stores = data.stores || [];
+    const pendCount = stores.filter(s => s.pending).length;
+    const counts = stores.reduce((acc, s) => { const k = s.state || 'active'; acc[k] = (acc[k] || 0) + 1; return acc; }, {});
+
+    function platformHTML() {
+      return `
+        <div class="page-subtitle">${t('subPlatformSubtitle', 'نظرة شاملة على اشتراكات كل المتاجر — اختر متجراً لعرض تفاصيله الكاملة.')}</div>
+
+        <div class="card sub-hero sub-hero-platform">
+          <div class="sub-platform-kpis">
+            <div class="sub-plat-kpi"><span class="sub-plat-num">${stores.length}</span><span class="sub-plat-lbl">🏪 ${t('subStoresTotal', 'إجمالي المتاجر')}</span></div>
+            <div class="sub-plat-kpi"><span class="sub-plat-num" style="color:#10b981">${counts.active || 0}</span><span class="sub-plat-lbl">✅ ${t('subStateActive', 'مفعّل')}</span></div>
+            <div class="sub-plat-kpi"><span class="sub-plat-num" style="color:#f59e0b">${(counts.expiring || 0) + (counts.grace || 0)}</span><span class="sub-plat-lbl">⚠️ ${t('subNeedsAttention', 'يحتاج متابعة')}</span></div>
+            <div class="sub-plat-kpi"><span class="sub-plat-num" style="color:#ef4444">${(counts.expired || 0) + (counts.suspended || 0) + (counts.trial_expired || 0)}</span><span class="sub-plat-lbl">⛔ ${t('subStopped', 'متوقف')}</span></div>
+            <div class="sub-plat-kpi"><span class="sub-plat-num" style="color:#6366f1">${pendCount}</span><span class="sub-plat-lbl">⏳ ${t('subPendingCount', 'طلبات معلّقة')}</span></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="sub-platform-head">
+            <div class="card-title">🏪 ${t('subPlatformTitle', 'اشتراكات المتاجر')}</div>
+            <input class="input sub-store-search" id="subStoreSearch" type="search"
+                   placeholder="${t('subStoreSearch', 'بحث باسم المتجر…')}" />
+          </div>
+          <div class="sub-store-grid" id="subStoreGrid"></div>
+        </div>`;
+    }
+
+    function renderStoreGrid() {
+      const grid = content.querySelector('#subStoreGrid');
+      if (!grid) return;
+      const q = (content.querySelector('#subStoreSearch') || {}).value || '';
+      const norm = (x) => String(x || '').toLowerCase().trim();
+      const list = stores.filter(s => !norm(q) || norm(s.name).includes(norm(q)));
+      if (!list.length) {
+        grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">${stores.length ? t('subNoMatch', 'لا نتائج مطابقة للبحث') : t('subPlatformEmpty', 'لا توجد متاجر مسجلة بعد')}</div>`;
+        return;
+      }
+      grid.innerHTML = list.map(s => {
+        const b = STATE_BADGES[s.state] || STATE_BADGES.active;
+        const days = s.daysLeft == null ? '' : (s.daysLeft >= 0
+          ? `<div class="sub-store-days">${t('subDaysLeft', 'يوماً متبقياً')}: <strong>${s.daysLeft}</strong></div>`
+          : `<div class="sub-store-days text-danger">${t('subDaysOver', 'يوماً بعد انتهاء الفترة')}: <strong>${Math.abs(s.daysLeft)}</strong></div>`);
+        const ends = s.plan === 'trial' ? s.trialEndsAt : s.subscriptionEndsAt;
+        return `
+          <div class="sub-store-card ${s.pending ? 'has-pending' : ''}" data-store="${esc(s.id)}" role="button" tabindex="0">
+            <div class="sub-store-top">
+              <strong class="sub-store-name">${esc(s.name)}</strong>
+              <span class="badge ${b.cls}">${t(b.key, b.fb)}</span>
+            </div>
+            <div class="sub-store-mid">
+              <span class="badge badge-muted">💼 ${esc(lbl(PLAN_LABELS, s.plan))}</span>
+              ${s.billingCycle ? `<span class="badge badge-muted">${s.billingCycle === 'yearly' ? t('subCycleYearly', 'سنوي') : t('subCycleMonthly', 'شهري')}</span>` : ''}
+              ${s.status === 'suspended' ? `<span class="badge badge-danger">${t('subStateSuspended', 'موقوف')}</span>` : ''}
+            </div>
+            ${ends ? `<div class="sub-store-ends muted">${s.plan === 'trial' ? t('trialEnds', 'نهاية التجربة') : t('subEnds', 'نهاية الفترة')}: ${fmtDate(ends)}</div>` : ''}
+            ${days}
+            ${s.pending ? `<div class="sub-store-pending">⏳ ${esc(lbl(TYPE_LABELS, s.pending.type))} → ${esc(lbl(PLAN_LABELS, s.pending.requestedPlan))} · ${fmtMoney(s.pending.amount)} DZD</div>` : ''}
+            <button class="btn btn-secondary btn-sm sub-store-open">${t('subPickStore', 'عرض التفاصيل')} ›</button>
+          </div>`;
+      }).join('');
+      grid.querySelectorAll('.sub-store-card').forEach(card => {
+        const open = () => {
+          window.dzposSubFocusId = card.dataset.store;
+          focusId = card.dataset.store;
+          window.loadPage('subscription');
+        };
+        card.addEventListener('click', open);
+        card.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+      });
+    }
+
+    content.innerHTML = platformHTML();
+    renderStoreGrid();
+    const search = content.querySelector('#subStoreSearch');
+    if (search) search.addEventListener('input', renderStoreGrid);
+    return;
+  }
+
+  /* ============================================================
+   * STORE DETAIL VIEW (store admin — or super-admin in focus mode)
+   * ============================================================ */
   const st = data.store || {};
   const plan = data.plan || {};
   const limits = st.limits || plan || {};
@@ -85,6 +188,9 @@ export async function renderSubscriptionPage(ctx) {
   const state = data.state || 'active';
   const daysLeft = data.daysLeft;
   const pending = data.pending;
+  const isPlatformFocus = !!data.isPlatformFocus;
+  if (isSuperAdmin) window.dzposSubFocusId = focusId || '';
+  else window.dzposSubFocusId = '';
 
   /* ---------- helpers ---------- */
   function periodBar() {
@@ -93,7 +199,6 @@ export async function renderSubscriptionPage(ctx) {
     }
     if (daysLeft == null) return '';
     const totalDays = (function () {
-      const start = st.plan === 'trial' ? st.trialEndsAt : st.subscriptionEndsAt;
       const base = st.plan === 'trial' ? 14 : (st.billingCycle === 'yearly' ? 365 : 31);
       return base;
     })();
@@ -124,12 +229,18 @@ export async function renderSubscriptionPage(ctx) {
   const priceNow = st.plan !== 'trial' ? (st.billingCycle === 'yearly' ? plan.yearly : plan.monthly) : 0;
 
   content.innerHTML = `
+    ${isPlatformFocus ? `
+    <div class="card sub-focus-banner">
+      <div>🛡️ ${t('subPlatformFocusBanner', 'أنت تعرض اشتراك متجر من حساب المنصة — طلبات التغيير تُرسل من طرف المتجر نفسه، ولديك التحكم الكامل من تبويب المنصة.')}</div>
+      <button class="btn btn-secondary btn-sm" id="subBackBtn">← ${t('subBackToStores', 'كل المتاجر')}</button>
+    </div>` : ''}
     <div class="page-subtitle">${t('subPageTitle', 'تفاصيل اشتراك مخزنكم، الخطط المتوفرة، وطلبات التغيير أو التجديد.')}</div>
 
     <!-- ===== hero status ===== -->
     <div class="card sub-hero">
       <div class="sub-hero-main">
         <div class="sub-hero-plan">
+          ${isPlatformFocus ? `<span class="badge badge-info" style="font-size:13px;padding:5px 12px">🏪 ${esc(st.name || '')}</span>` : ''}
           <span class="badge ${plan.badge || 'badge-info'}" style="font-size:14px;padding:6px 14px">💼 ${esc(lbl(PLAN_LABELS, st.plan))}</span>
           <span class="badge ${badge.cls}">${t(badge.key, badge.fb)}</span>
           ${st.plan !== 'trial' && st.billingCycle ? `<span class="badge badge-muted">${st.billingCycle === 'yearly' ? t('subCycleYearly', 'سنوي') : t('subCycleMonthly', 'شهري')}</span>` : ''}
@@ -155,7 +266,7 @@ export async function renderSubscriptionPage(ctx) {
     <div class="card sub-pending">
       <div>
         ⏳ <strong>${t('subPendingBanner', 'لديكم طلب قيد المراجعة')}:</strong>
-        ${t('subTypeNew', 'اشتراك جديد') === '' ? '' : ''}${esc(lbl(TYPE_LABELS, pending.type))} → <strong>${esc(lbl(PLAN_LABELS, pending.requestedPlan))}</strong>
+        ${esc(lbl(TYPE_LABELS, pending.type))} → <strong>${esc(lbl(PLAN_LABELS, pending.requestedPlan))}</strong>
         (${pending.billingCycle === 'yearly' ? t('subCycleYearly', 'سنوي') : t('subCycleMonthly', 'شهري')} · ${fmtMoney(pending.amount)} DZD)
         <span class="badge badge-warning">${t('subStatusPending', 'قيد المراجعة')}</span>
         <br/><small class="muted">${t('subPendingHint', 'سيتم تفعيل الاشتراك تلقائياً بعد تأكيد إدارة المنصة للدفع.')}</small>
@@ -206,9 +317,18 @@ export async function renderSubscriptionPage(ctx) {
       </table></div>
     </div>`;
 
+  /* ---------- platform focus: back button ---------- */
+  const backBtn = content.querySelector('#subBackBtn');
+  if (backBtn) backBtn.addEventListener('click', () => {
+    focusId = '';
+    window.dzposSubFocusId = '';
+    window.loadPage('subscription');
+  });
+
   /* ---------- plan cards ---------- */
   function renderPlans() {
     const wrap = content.querySelector('#subPlans');
+    if (!wrap) return;
     wrap.innerHTML = catalog.map(p => {
       const isCurrent = p.key === st.plan;
       const price = cycleView === 'yearly' ? p.yearly : p.monthly;
@@ -230,7 +350,7 @@ export async function renderSubscriptionPage(ctx) {
             <li>✨ ${p.aiDailyCalls} ${t('subAiCallsDay', 'طلب AI / يوم')}</li>
           </ul>
           <button class="btn ${isCurrent ? 'btn-secondary' : 'btn-primary'} btn-block" data-plan="${p.key}" ${disabled ? 'disabled' : ''}>
-            ${isCurrent ? t('subCurrentCta', 'خطتكم الحالية') : pending ? t('subPendingCta', 'طلب قيد المراجعة…') : !canRequest ? t('subAdminOnlyCta', 'للمدير فقط') : t(ctaKey, 'طلب الاشتراك')}
+            ${isCurrent ? t('subCurrentCta', 'خطتكم الحالية') : pending ? t('subPendingCta', 'طلب قيد المراجعة…') : !canRequest ? (isPlatformFocus ? t('subPlatformManagedCta', 'يُدار من المنصة') : t('subAdminOnlyCta', 'للمدير فقط')) : t(ctaKey, 'طلب الاشتراك')}
           </button>
         </div>`;
     }).join('');

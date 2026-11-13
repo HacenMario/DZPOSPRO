@@ -1205,6 +1205,15 @@
   background: var(--danger);
   border-radius: var(--radius-full);
 }
+/* v4.3.1 — 320px guard: long product names must wrap instead of pushing the
+   row past the viewport edge (measured 45px overflow on 320px phones). */
+.low-stock-item { min-width: 0; max-width: 100%; }
+.low-stock-item .low-stock-name { min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
+.low-stock-item .badge { flex-shrink: 0; }
+@media (max-width: 400px) {
+  .low-stock-item { gap: 0.5rem; padding: 0.6rem; }
+  .low-stock-item .low-stock-bar { width: 52px; }
+}
 
 .recent-sales-list { display: grid; gap: 0.4rem; }
 .recent-sale-item {

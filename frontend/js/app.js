@@ -282,7 +282,7 @@
       dotEl.addEventListener('click', () => probeServer());
     }
     const verEl = document.querySelector('[data-i18n="version"]');
-    if (verEl) verEl.textContent = 'v4.3.0';
+    if (verEl) verEl.textContent = (window.DZPOS_VERSION || '4.3.1') ? 'v' + window.DZPOS_VERSION : 'v4.3.1';
   });
 
   // Expose setTheme globally for any external caller
