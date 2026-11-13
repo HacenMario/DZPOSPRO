@@ -20,6 +20,7 @@ export async function renderPlatformPage(ctx) {
     <div class="tabs-bar">
       <button class="tab-btn active" data-tab="overview">📊 ${t('pfOverview', 'نظرة عامة')}</button>
       <button class="tab-btn" data-tab="stores">🏪 ${t('stores', 'المخازن')}</button>
+      <button class="tab-btn" data-tab="subs">💼 ${t('pfSubsTab', 'الاشتراكات')}</button>
       <button class="tab-btn" data-tab="backups">💾 ${t('backups', 'النسخ الاحتياطي')}</button>
     </div>
     <div class="tab-body" id="pfTabBody"></div>`;
@@ -38,6 +39,7 @@ export async function renderPlatformPage(ctx) {
     const body = content.querySelector('#pfTabBody');
     if (name === 'overview') renderOverview(body);
     else if (name === 'stores') renderStores(body);
+    else if (name === 'subs') renderSubs(body);
     else renderBackups(body);
   }
 
@@ -456,6 +458,304 @@ export async function renderPlatformPage(ctx) {
         });
       }
     });
+  }
+
+  /* ================= SUBSCRIPTIONS (v4.3 billing console) ================= */
+  // Mirror of backend/config/plans.js — used for the manual-apply amount preview.
+  const PLAN_PRICES = {
+    basic:      { monthly: 2500,   yearly: 25000 },
+    pro:        { monthly: 5000,   yearly: 50000 },
+    enterprise: { monthly: 10000,  yearly: 100000 }
+  };
+  let subsCharts = [];
+
+  const CYCLE_MONTHS = { monthly: 1, yearly: 12 };
+
+  const subStateBadge = (s) => {
+    const map = {
+      trial:         ['badge-info',    t('subStateTrial', 'فترة تجريبية')],
+      trial_expired: ['badge-danger',  t('subStateTrialExpired', 'انتهت التجربة')],
+      active:        ['badge-success', t('subStateActive', 'مفعّل')],
+      expiring:      ['badge-warning', t('subStateExpiring', 'ينتهي قريباً')],
+      grace:         ['badge-warning', t('subStateGrace', 'متأخر السداد')],
+      expired:       ['badge-danger',  t('subStateExpired', 'منتهي')],
+      suspended:     ['badge-danger',  t('subStateSuspended', 'موقوف')]
+    };
+    const hit = map[s] || map.active;
+    return `<span class="badge ${hit[0]}">${hit[1]}</span>`;
+  };
+
+  async function renderSubs(body) {
+    body.innerHTML = `<div class="loading-state"><div class="spinner"></div></div>`;
+    let d, reqs;
+    try {
+      const [r1, r2] = await Promise.all([
+        apiFetch.get('/api/subscription/admin/overview'),
+        apiFetch.get('/api/subscription/admin/requests?limit=100')
+      ]);
+      d = r1.data || r1;
+      reqs = (r2.data || r2).data || [];
+    } catch (err) {
+      body.innerHTML = `<div class="empty-state"><div class="empty-title">⛔ ${esc(err.message)}</div></div>`; return;
+    }
+
+    const rev = d.revenue || {};
+    const sts = d.stores || {};
+    const money = (n) => Number(n || 0).toLocaleString('en-US');
+
+    body.innerHTML = `
+      <div class="kpi-grid">
+        <div class="card kpi-card"><div class="kpi-label">📈 ${t('subKpiMrr', 'الإيراد الشهري المتكرر')}</div><div class="kpi-value">${money(rev.mrr)}</div><div class="kpi-sub">DZD · ${t('subKpiMrrSub', 'من الخطط الفعالة')}</div></div>
+        <div class="card kpi-card"><div class="kpi-label">💰 ${t('subKpiCollectedMonth', 'المُحصّل هذا الشهر')}</div><div class="kpi-value">${money(rev.collectedThisMonth)}</div><div class="kpi-sub">DZD · ${rev.paymentsThisMonth || 0} ${t('subPaymentsCount', 'دفعة')}</div></div>
+        <div class="card kpi-card"><div class="kpi-label">🏦 ${t('subKpiCollectedTotal', 'إجمالي المُحصّل')}</div><div class="kpi-value">${money(rev.collectedTotal)}</div><div class="kpi-sub">DZD · ${rev.paymentsCount || 0} ${t('subPaymentsCount', 'دفعة')}</div></div>
+        <div class="card kpi-card"><div class="kpi-label">✅ ${t('subKpiActivePaid', 'اشتراكات فعالة')}</div><div class="kpi-value">${sts.activePaid || 0}</div><div class="kpi-sub">${sts.trialActive || 0} ${t('pfTrial', 'تجريبي')} · ${sts.expired || 0} ${t('subStateExpired', 'منتهي')} · ${sts.suspended || 0} ${t('suspended', 'موقوف')}</div></div>
+        <div class="card kpi-card"><div class="kpi-label">⏳ ${t('subKpiExpiring', 'تنتهي خلال 14 يوماً')}</div><div class="kpi-value">${(d.expiringSoon || []).length}</div><div class="kpi-sub">${t('subKpiExpiringSub', 'تواصل معهم للتجديد')}</div></div>
+        <div class="card kpi-card"><div class="kpi-label">📥 ${t('subKpiPending', 'طلبات منتظرة')}</div><div class="kpi-value">${(d.requests && d.requests.pending) || 0}</div><div class="kpi-sub">${t('subKpiPendingSub', 'تأكيد الدفع ثم الموافقة')}</div></div>
+      </div>
+
+      <div class="pf-two-col">
+        <div class="card pf-panel">
+          <div class="pf-panel-head"><strong>📊 ${t('subRevenueChart', 'الإيراد المحصّل — آخر 12 شهراً (DZD)')}</strong></div>
+          <div style="height:230px"><canvas id="subRevChart"></canvas></div>
+        </div>
+        <div class="card pf-panel">
+          <div class="pf-panel-head"><strong>🧩 ${t('subPlanDistChart', 'توزيع المخازن على الخطط')}</strong></div>
+          <div style="height:230px"><canvas id="subPlanChart"></canvas></div>
+        </div>
+      </div>
+
+      ${(d.expiringSoon || []).length ? `
+      <div class="card pf-warn" style="margin-top:14px">⏳ <strong>${t('subExpiringTitle', 'اشتراكات تنتهي قريباً')}:</strong>
+        ${d.expiringSoon.slice(0, 6).map(x => `${esc(x.name)} (${esc(x.plan)}) — ${x.daysLeft} ${t('pfDayShort', 'ي')}`).join(' · ')}
+      </div>` : ''}
+
+      <!-- ===== requests queue ===== -->
+      <div class="card" style="margin-top:14px">
+        <div class="card-title" style="margin-bottom:10px">📥 ${t('subQueueTitle', 'طلبات الاشتراك — تأكيد الدفع والتفعيل')}</div>
+        <div class="toolbar" style="margin-bottom:10px">
+          <div class="toolbar-left">
+            <select class="select" id="subReqFilter">
+              <option value="">${t('subFilterAll', 'كل الطلبات')}</option>
+              <option value="pending">${t('subStatusPending', 'قيد المراجعة')}</option>
+              <option value="approved">${t('subStatusApproved', 'مقبول')}</option>
+              <option value="rejected">${t('subStatusRejected', 'مرفوض')}</option>
+              <option value="cancelled">${t('subStatusCancelled', 'ملغى')}</option>
+            </select>
+          </div>
+        </div>
+        <div class="table-wrap"><table class="table table-hover">
+          <thead><tr>
+            <th>${t('subReqStore', 'المخزن')}</th><th>${t('subReqType', 'النوع')}</th><th>${t('subReqTarget', 'الطلب')}</th>
+            <th>${t('subReqAmount', 'المبلغ')}</th><th>${t('subReqMethod', 'الدفع')}</th><th>${t('subReqDate', 'التاريخ')}</th>
+            <th>${t('subHStatus', 'الحالة')}</th><th>${t('actions', 'إجراءات')}</th>
+          </tr></thead>
+          <tbody id="subReqRows"></tbody>
+        </table></div>
+      </div>
+
+      <!-- ===== per-store subscriptions ===== -->
+      <div class="card" style="margin-top:14px">
+        <div class="card-title" style="margin-bottom:10px">🏪 ${t('subStoresTitle', 'اشتراكات المخازن')}</div>
+        <div class="table-wrap"><table class="table table-hover">
+          <thead><tr>
+            <th>${t('storeName', 'المخزن')}</th><th>${t('plan', 'الخطة')}</th><th>${t('subStateTitle', 'الحالة')}</th>
+            <th>${t('subStoreEnd', 'نهاية الفترة')}</th><th>${t('subStorePaid', 'إجمالي المدفوع')}</th>
+            <th>${t('subStorePayments', 'الدفعات')}</th><th>${t('subStoreLastPay', 'آخر دفعة')}</th><th>${t('actions', 'إجراءات')}</th>
+          </tr></thead>
+          <tbody>
+            ${(d.perStore || []).length ? d.perStore.map(s => `
+              <tr>
+                <td><strong>${esc(s.name)}</strong><br/><small class="muted">${esc(s.email || s.ownerName || '')}${s.city ? ' · ' + esc(s.city) : ''}</small></td>
+                <td>${planBadge(s.plan)}${s.billingCycle ? `<br/><small class="muted">${s.billingCycle === 'yearly' ? t('subCycleYearly', 'سنوي') : t('subCycleMonthly', 'شهري')}</small>` : ''}</td>
+                <td>${subStateBadge(s.state)}</td>
+                <td>${s.plan === 'trial' ? (s.trialEndsAt ? fmtDate(s.trialEndsAt) : '—') : (s.subscriptionEndsAt ? fmtDate(s.subscriptionEndsAt) + `<br/><small class="muted">${s.daysLeft != null ? (s.daysLeft >= 0 ? s.daysLeft + ' ' + t('pfDayShort', 'ي') : Math.abs(s.daysLeft) + ' ' + t('subDaysOverShort', 'ي بعد الانتهاء')) : ''}</small>` : `<span class="muted">${t('subLegacy', 'موروث')}</span>`)}</td>
+                <td>${money(s.paidTotal)} <small class="muted">DZD</small></td>
+                <td>${s.paymentsCount || 0}</td>
+                <td class="cell-muted">${s.lastPaymentAt ? fmtDate(s.lastPaymentAt) : '—'}</td>
+                <td class="row-actions">
+                  <button class="btn btn-sm btn-primary sub-pay" data-id="${s._id}" data-name="${esc(s.name)}" data-plan="${esc(s.plan)}">💳 ${t('subRecordPayment', 'تسجيل دفع')}</button>
+                  <button class="btn btn-sm btn-secondary pf-edit" data-id="${s._id}">✏️</button>
+                </td>
+              </tr>`).join('') : `<tr><td colspan="8" class="empty-state">${t('noData', 'لا بيانات')}</td></tr>`}
+          </tbody>
+        </table></div>
+      </div>`;
+
+    /* ----- charts ----- */
+    subsCharts.forEach(c => { try { c.destroy(); } catch (_) {} });
+    subsCharts = [];
+    try {
+      if (typeof Chart !== 'undefined') {
+        const revEl = body.querySelector('#subRevChart');
+        if (revEl) {
+          subsCharts.push(new Chart(revEl.getContext('2d'), {
+            type: 'bar',
+            data: {
+              labels: (d.monthlySeries || []).map(m => m.month.slice(2)),
+              datasets: [{ label: 'DZD', data: (d.monthlySeries || []).map(m => m.total), backgroundColor: 'rgba(16,185,129,.75)', borderRadius: 6, maxBarThickness: 26 }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+          }));
+        }
+        const planEl = body.querySelector('#subPlanChart');
+        if (planEl) {
+          const dist = d.planDistribution || {};
+          const keys = Object.keys(dist);
+          const colors = { trial: '#f59e0b', basic: '#3b82f6', pro: '#10b981', enterprise: '#7c3aed' };
+          subsCharts.push(new Chart(planEl.getContext('2d'), {
+            type: 'doughnut',
+            data: {
+              labels: keys.map(k => `${k} (${dist[k]})`),
+              datasets: [{ data: keys.map(k => dist[k]), backgroundColor: keys.map(k => colors[k] || '#94a3b8') }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, cutout: '58%' }
+          }));
+        }
+      }
+    } catch (e) { console.warn('[platform] charts failed', e); }
+
+    /* ----- requests rows + filter ----- */
+    const rowsEl = body.querySelector('#subReqRows');
+    const filterEl = body.querySelector('#subReqFilter');
+    function drawRows() {
+      const f = filterEl.value;
+      const list = f ? reqs.filter(r => r.status === f) : reqs;
+      rowsEl.innerHTML = list.length ? list.map(r => {
+        const cls = { pending: 'badge-warning', approved: 'badge-success', rejected: 'badge-danger', cancelled: 'badge-muted' }[r.status] || 'badge-muted';
+        const lblStatus = { pending: t('subStatusPending', 'قيد المراجعة'), approved: t('subStatusApproved', 'مقبول'), rejected: t('subStatusRejected', 'مرفوض'), cancelled: t('subStatusCancelled', 'ملغى') }[r.status] || r.status;
+        const typeLbl = { new: t('subTypeNew', 'اشتراك جديد'), change: t('subTypeChange', 'تغيير خطة'), renewal: t('subTypeRenewal', 'تجديد') }[r.type] || r.type;
+        const methodLbl = { ccp: t('payCcp', 'CCP'), baridimob: t('payBaridimob', 'BaridiMob'), cash: t('payCash', 'نقداً'), bank_transfer: t('payBank', 'تحويل بنكي'), other: t('payOther', 'أخرى'), manual: t('payManual', 'يدوي') }[r.paymentMethod] || r.paymentMethod;
+        return `
+          <tr ${r.status === 'pending' ? 'style="background:rgba(245,158,11,.06)"' : ''}>
+            <td><strong>${esc(r.store ? r.store.name : '—')}</strong><br/><small class="muted">${r.store ? esc(r.store.plan || '') : ''}</small></td>
+            <td>${esc(typeLbl)}</td>
+            <td>${planBadge(r.requestedPlan)} <small class="muted">· ${r.billingCycle === 'yearly' ? t('subCycleYearly', 'سنوي') : t('subCycleMonthly', 'شهري')}</small></td>
+            <td>${money(r.amount)} <small class="muted">DZD</small></td>
+            <td class="cell-muted">${esc(methodLbl)}${r.paymentReference ? `<br/><small class="muted">${esc(r.paymentReference)}</small>` : ''}</td>
+            <td class="cell-muted">${fmtDate(r.createdAt)}</td>
+            <td><span class="badge ${cls}">${esc(lblStatus)}</span></td>
+            <td class="row-actions">
+              ${r.status === 'pending' ? `
+                <button class="btn btn-sm btn-primary sub-approve" data-req='${esc(JSON.stringify({ id: r._id, amount: r.amount, method: r.paymentMethod, ref: r.paymentReference, cycle: r.billingCycle }))}'>✅ ${t('subApprove', 'تأكيد وتفعيل')}</button>
+                <button class="btn btn-sm btn-danger sub-reject" data-id="${r._id}">✖️ ${t('subReject', 'رفض')}</button>` : ''}
+            </td>
+          </tr>`;
+      }).join('') : `<tr><td colspan="8" class="empty-state">${t('subQueueEmpty', 'لا طلبات مطابقة')}</td></tr>`;
+
+      rowsEl.querySelectorAll('.sub-approve').forEach(b => b.addEventListener('click', () => openApproveModal(JSON.parse(b.dataset.req))));
+      rowsEl.querySelectorAll('.sub-reject').forEach(b => b.addEventListener('click', () => openRejectModal(b.dataset.id)));
+    }
+    drawRows();
+    filterEl.addEventListener('change', drawRows);
+
+    /* ----- approve modal ----- */
+    function openApproveModal(q) {
+      pfModal({
+        title: '✅ ' + t('subApproveTitle', 'تأكيد الدفع وتفعيل الاشتراك'),
+        subtitle: t('subApproveHint', 'راجع معلومات الدفع، عدّل المبلغ الفعلي إن لزم، ثم وافق.'),
+        body: `
+          <div class="pf-grid">
+            <div><label class="pf-label">${t('subReqAmount', 'المبلغ الفعلي المستلم (DZD)')}</label><input class="input" id="subApAmount" type="number" min="0" value="${q.amount}" /></div>
+            <div><label class="pf-label">${t('subApproveMonths', 'مدة الفترة (أشهر)')}</label><input class="input" id="subApMonths" type="number" min="1" max="36" value="${CYCLE_MONTHS[q.cycle] || 1}" /></div>
+            <div><label class="pf-label">${t('subReqMethod', 'طريقة الدفع')}</label>
+              <select class="select" id="subApMethod">
+                ${['ccp', 'baridimob', 'cash', 'bank_transfer', 'other'].map(m => `<option value="${m}" ${q.method === m ? 'selected' : ''}>${
+                  m === 'ccp' ? t('payCcp', 'CCP') : m === 'baridimob' ? t('payBaridimob', 'BaridiMob') : m === 'cash' ? t('payCash', 'نقداً') : m === 'bank_transfer' ? t('payBank', 'تحويل بنكي') : t('payOther', 'أخرى')
+                }</option>`).join('')}
+              </select></div>
+            <div><label class="pf-label">${t('subPayRef', 'مرجع الدفع')}</label><input class="input" id="subApRef" value="${esc(q.ref || '')}" /></div>
+            <div class="pf-span2"><label class="pf-label">${t('subApproveNote', 'ملاحظة (تظهر للمخزن)')}</label><textarea class="input" id="subApNote" rows="2"></textarea></div>
+          </div>`,
+        confirmText: t('subApproveConfirm', 'تأكيد الدفع وتفعيل'),
+        onConfirm: async (close) => {
+          try {
+            await apiFetch.post('/api/subscription/admin/requests/' + q.id + '/approve', {
+              paidAmount: +val('subApAmount') || 0,
+              periodMonths: +val('subApMonths') || 1,
+              paymentMethod: val('subApMethod'),
+              paymentReference: val('subApRef'),
+              adminNote: val('subApNote')
+            });
+            window.Toast && Toast.success(t('subApproveDone', 'تم تفعيل الاشتراك ✓'));
+            close(); refreshCurrent();
+          } catch (err) { window.Toast && Toast.error(err.message); }
+        }
+      });
+    }
+
+    /* ----- reject modal ----- */
+    function openRejectModal(id) {
+      pfModal({
+        title: '✖️ ' + t('subRejectTitle', 'رفض طلب الاشتراك'),
+        body: `<div><label class="pf-label">${t('subRejectNote', 'سبب الرفض (يظهر للمخزن)')}</label>
+          <textarea class="input" id="subRjNote" rows="3"></textarea></div>`,
+        confirmText: t('subReject', 'رفض الطلب'),
+        onConfirm: async (close) => {
+          try {
+            await apiFetch.post('/api/subscription/admin/requests/' + id + '/reject', { adminNote: val('subRjNote') });
+            window.Toast && Toast.success(t('subRejectDone', 'تم رفض الطلب'));
+            close(); refreshCurrent();
+          } catch (err) { window.Toast && Toast.error(err.message); }
+        }
+      });
+    }
+
+    /* ----- manual payment / renewal per store ----- */
+    body.querySelectorAll('.pf-edit').forEach(b => b.addEventListener('click', () => openStoreModal(b.dataset.id)));
+    body.querySelectorAll('.sub-pay').forEach(b => b.addEventListener('click', () => {
+      const storeId = b.dataset.id, name = b.dataset.name, curPlan = b.dataset.plan;
+      pfModal({
+        title: '💳 ' + t('subApplyTitle', 'تسجيل دفع / تجديد اشتراك'),
+        subtitle: esc(name) + (PLAN_PRICES[curPlan] ? ` · ${t('plan', 'الخطة')}: ${curPlan}` : ''),
+        body: `
+          <div class="pf-grid">
+            <div><label class="pf-label">${t('subApplyPlan', 'الخطة')}</label>
+              <select class="select" id="subMpPlan">
+                ${['basic', 'pro', 'enterprise'].map(p => `<option value="${p}" ${p === curPlan ? 'selected' : ''}>${p}</option>`).join('')}
+              </select></div>
+            <div><label class="pf-label">${t('subApplyCycle', 'الدورة')}</label>
+              <select class="select" id="subMpCycle">
+                <option value="monthly">${t('subCycleMonthly', 'شهري')}</option>
+                <option value="yearly">${t('subCycleYearly', 'سنوي')}</option>
+              </select></div>
+            <div><label class="pf-label">${t('subApplyMonths', 'المدة (أشهر)')}</label><input class="input" id="subMpMonths" type="number" min="1" max="36" value="1" /></div>
+            <div><label class="pf-label">${t('subReqAmount', 'المبلغ المستلم (DZD)')}</label><input class="input" id="subMpAmount" type="number" min="0" value="${PLAN_PRICES[curPlan] ? PLAN_PRICES[curPlan].monthly : 0}" /></div>
+            <div><label class="pf-label">${t('subReqMethod', 'طريقة الدفع')}</label>
+              <select class="select" id="subMpMethod">
+                ${['ccp', 'baridimob', 'cash', 'bank_transfer', 'other', 'manual'].map(m => `<option value="${m}">${
+                  m === 'ccp' ? t('payCcp', 'CCP') : m === 'baridimob' ? t('payBaridimob', 'BaridiMob') : m === 'cash' ? t('payCash', 'نقداً') : m === 'bank_transfer' ? t('payBank', 'تحويل بنكي') : m === 'manual' ? t('payManual', 'يدوي') : t('payOther', 'أخرى')
+                }</option>`).join('')}
+              </select></div>
+            <div><label class="pf-label">${t('subPayRef', 'مرجع الدفع')}</label><input class="input" id="subMpRef" /></div>
+            <div class="pf-span2"><label class="pf-label">${t('subApproveNote', 'ملاحظة (تظهر للمخزن)')}</label><textarea class="input" id="subMpNote" rows="2"></textarea></div>
+          </div>`,
+        confirmText: t('subApplyConfirm', 'تسجيل وتفعيل'),
+        onConfirm: async (close) => {
+          try {
+            await apiFetch.post('/api/subscription/admin/apply', {
+              storeId, plan: val('subMpPlan'), billingCycle: val('subMpCycle'),
+              months: +val('subMpMonths') || 1, paidAmount: +val('subMpAmount') || 0,
+              paymentMethod: val('subMpMethod'), paymentReference: val('subMpRef'),
+              adminNote: val('subMpNote')
+            });
+            window.Toast && Toast.success(t('subApplyDone', 'تم تسجيل الدفع وتفعيل الاشتراك ✓'));
+            close(); refreshCurrent();
+          } catch (err) { window.Toast && Toast.error(err.message); }
+        }
+      });
+      // live amount preview: price(plan,cycle) × months / cycleMonths
+      const recalc = () => {
+        const p = val('subMpPlan'), c = val('subMpCycle'), m = Math.max(1, +val('subMpMonths') || 1);
+        const price = PLAN_PRICES[p] ? (c === 'yearly' ? PLAN_PRICES[p].yearly : PLAN_PRICES[p].monthly) : 0;
+        const per = c === 'yearly' ? 12 : 1;
+        document.getElementById('subMpAmount').value = Math.round(price * (m / per));
+      };
+      ['subMpPlan', 'subMpCycle', 'subMpMonths'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('change', recalc);
+        if (el) el.addEventListener('input', recalc);
+      });
+    }));
   }
 
   /* ================= BACKUPS (kept from v3) ================= */

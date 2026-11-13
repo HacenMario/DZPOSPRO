@@ -11,6 +11,7 @@
 const { runWithTenant } = require('../services/tenantContext');
 const mongoose = require('mongoose');
 const Store = require('../models/Store');
+const { GRACE_DAYS } = require('../models/Store');
 const { getTranslation } = require('../config/i18n');
 const logger = require('../utils/logger');
 
@@ -23,7 +24,7 @@ async function getStoreDoc(storeId) {
     const hit = storeCache.get(key);
     if (hit && (Date.now() - hit.ts) < CACHE_TTL) return hit.doc;
     let doc = null;
-    try { doc = await Store.findById(storeId).select('status plan name limits trialEndsAt').lean(); } catch (_) {}
+    try { doc = await Store.findById(storeId).select('status plan name limits trialEndsAt subscriptionEndsAt').lean(); } catch (_) {}
     storeCache.set(key, { doc, ts: Date.now() });
     return doc;
 }
@@ -80,6 +81,17 @@ const tenantMiddleware = (req, res, next) => {
                     success: false,
                     message: getTranslation('storeSuspended', req.lang || 'ar')
                 });
+            }
+            // v4.3 — paid-plan expiry enforcement after the grace window.
+            // Legacy stores (no subscriptionEndsAt) and trials keep the old behaviour.
+            if (store.plan !== 'trial' && store.subscriptionEndsAt) {
+                const graceEnd = new Date(new Date(store.subscriptionEndsAt).getTime() + GRACE_DAYS * 24 * 3600 * 1000);
+                if (graceEnd < new Date()) {
+                    return res.status(403).json({
+                        success: false,
+                        message: getTranslation('subscriptionExpired', req.lang || 'ar')
+                    });
+                }
             }
             req.storeId = storeId;
             req.store = store;

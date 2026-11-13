@@ -17,7 +17,7 @@
  *   • Web Push (VAPID) + Background Sync unchanged.
  * ============================================================ */
 
-const VERSION = 'v4.2.2';
+const VERSION = 'v4.3.0';
 const SHELL_CACHE = `dzpos-shell-${VERSION}`;
 const STATIC_CACHE = `dzpos-static-${VERSION}`;
 const API_CACHE = `dzpos-api-${VERSION}`;
@@ -37,6 +37,7 @@ const SHELL_ASSETS = [
     './css/theme-dark.css',
     './css/features.css',
     './css/upgrade.css',
+    './css/subscription.css',
     './vendor/sweetalert2.min.css',
     './js/config.js',
     './js/toast.js',
@@ -71,6 +72,7 @@ const SHELL_ASSETS = [
     './js/modules/ai.js',
     './js/modules/audit.js',
     './js/modules/platform.js',
+    './js/modules/subscription.js',
     './vendor/sweetalert2.min.js',
     './vendor/chart.umd.min.js',
     './vendor/jspdf.umd.min.js',

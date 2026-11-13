@@ -123,7 +123,20 @@ const translations = {
         purchaseOrderCreated: 'تم إنشاء أمر الشراء بنجاح',
         purchaseOrderUpdated: 'تم تحديث أمر الشراء بنجاح',
         purchaseOrderDeleted: 'تم حذف أمر الشراء بنجاح',
-        purchaseOrderNotFound: 'أمر الشراء غير موجود'
+        purchaseOrderNotFound: 'أمر الشراء غير موجود',
+        // Subscription (v4.3)
+        subscriptionRequestCreated: 'تم إرسال طلب الاشتراك بنجاح — سيتم التفعيل بعد تأكيد الدفع من إدارة المنصة',
+        subscriptionRequestExists: 'لديكم طلب قيد المراجعة بالفعل — يرجى انتظار الرد أو إلغاؤه أولاً',
+        subscriptionInvalidPlan: 'الخطة المطلوبة غير صالحة',
+        subscriptionInvalidCycle: 'دورة الفاتورة غير صالحة',
+        subscriptionInvalidMethod: 'طريقة الدفع غير صالحة',
+        subscriptionRequestNotFound: 'طلب الاشتراك غير موجود',
+        subscriptionAlreadyProcessed: 'تمت معالجة هذا الطلب مسبقاً',
+        subscriptionApproved: 'تم تأكيد الدفع وتفعيل الاشتراك بنجاح',
+        subscriptionRejected: 'تم رفض طلب الاشتراك',
+        subscriptionCancelled: 'تم إلغاء طلب الاشتراك',
+        subscriptionExpired: 'انتهى اشتراك المخزن — يرجى تجديد الاشتراك للوصول إلى النظام',
+        subscriptionApplied: 'تم تحديث اشتراك المخزن بنجاح',
     },
     en: {
         // General
@@ -247,7 +260,20 @@ const translations = {
         purchaseOrderCreated: 'Purchase order created successfully',
         purchaseOrderUpdated: 'Purchase order updated successfully',
         purchaseOrderDeleted: 'Purchase order deleted successfully',
-        purchaseOrderNotFound: 'Purchase order not found'
+        purchaseOrderNotFound: 'Purchase order not found',
+        // Subscription (v4.3)
+        subscriptionRequestCreated: 'Subscription request sent — it will be activated once the platform confirms the payment',
+        subscriptionRequestExists: 'You already have a pending request — wait for the reply or cancel it first',
+        subscriptionInvalidPlan: 'The requested plan is invalid',
+        subscriptionInvalidCycle: 'Invalid billing cycle',
+        subscriptionInvalidMethod: 'Invalid payment method',
+        subscriptionRequestNotFound: 'Subscription request not found',
+        subscriptionAlreadyProcessed: 'This request was already processed',
+        subscriptionApproved: 'Payment confirmed and subscription activated successfully',
+        subscriptionRejected: 'Subscription request rejected',
+        subscriptionCancelled: 'Subscription request cancelled',
+        subscriptionExpired: 'The store subscription has expired — please renew to access the system',
+        subscriptionApplied: 'Store subscription updated successfully',
     },
     fr: {
         // Général
@@ -371,7 +397,20 @@ const translations = {
         purchaseOrderCreated: 'Bon de commande créé avec succès',
         purchaseOrderUpdated: 'Bon de commande mis à jour avec succès',
         purchaseOrderDeleted: 'Bon de commande supprimé avec succès',
-        purchaseOrderNotFound: 'Bon de commande introuvable'
+        purchaseOrderNotFound: 'Bon de commande introuvable',
+        // Subscription (v4.3)
+        subscriptionRequestCreated: 'Demande d\u2019abonnement envoyée — activation après confirmation du paiement par la plateforme',
+        subscriptionRequestExists: 'Vous avez déjà une demande en attente — attendez la réponse ou annulez-la d\u2019abord',
+        subscriptionInvalidPlan: 'Le plan demandé est invalide',
+        subscriptionInvalidCycle: 'Cycle de facturation invalide',
+        subscriptionInvalidMethod: 'Méthode de paiement invalide',
+        subscriptionRequestNotFound: 'Demande d\u2019abonnement introuvable',
+        subscriptionAlreadyProcessed: 'Cette demande a déjà été traitée',
+        subscriptionApproved: 'Paiement confirmé et abonnement activé avec succès',
+        subscriptionRejected: 'Demande d\u2019abonnement refusée',
+        subscriptionCancelled: 'Demande d\u2019abonnement annulée',
+        subscriptionExpired: 'L\u2019abonnement du magasin a expiré — veuillez le renouveler pour accéder au système',
+        subscriptionApplied: 'Abonnement du magasin mis à jour avec succès',
     },
     tr: {
         // Genel
@@ -495,7 +534,20 @@ const translations = {
         purchaseOrderCreated: 'Satın alma siparişi başarıyla oluşturuldu',
         purchaseOrderUpdated: 'Satın alma siparişi başarıyla güncellendi',
         purchaseOrderDeleted: 'Satın alma siparişi başarıyla silindi',
-        purchaseOrderNotFound: 'Satın alma siparişi bulunamadı'
+        purchaseOrderNotFound: 'Satın alma siparişi bulunamadı',
+        // Subscription (v4.3)
+        subscriptionRequestCreated: 'Abonelik talebi gönderildi — platform ödemeyi onayladıktan sonra etkinleştirilir',
+        subscriptionRequestExists: 'Zaten bekleyen bir talebiniz var — yanıtı bekleyin veya önce iptal edin',
+        subscriptionInvalidPlan: 'İstenen plan geçersiz',
+        subscriptionInvalidCycle: 'Geçersiz faturalandırma döngüsü',
+        subscriptionInvalidMethod: 'Geçersiz ödeme yöntemi',
+        subscriptionRequestNotFound: 'Abonelik talebi bulunamadı',
+        subscriptionAlreadyProcessed: 'Bu talep zaten işlendi',
+        subscriptionApproved: 'Ödeme onaylandı ve abonelik başarıyla etkinleştirildi',
+        subscriptionRejected: 'Abonelik talebi reddedildi',
+        subscriptionCancelled: 'Abonelik talebi iptal edildi',
+        subscriptionExpired: 'Mağaza aboneliğinin süresi doldu — erişim için lütfen yenileyin',
+        subscriptionApplied: 'Mağaza aboneliği başarıyla güncellendi',
     },
 
     es: {
@@ -620,7 +672,20 @@ const translations = {
         purchaseOrderCreated: 'Orden de compra creada con éxito',
         purchaseOrderUpdated: 'Orden de compra actualizada con éxito',
         purchaseOrderDeleted: 'Orden de compra eliminada con éxito',
-        purchaseOrderNotFound: 'Orden de compra no encontrada'
+        purchaseOrderNotFound: 'Orden de compra no encontrada',
+        // Subscription (v4.3)
+        subscriptionRequestCreated: 'Solicitud de suscripción enviada — se activará cuando la plataforma confirme el pago',
+        subscriptionRequestExists: 'Ya tiene una solicitud pendiente — espere la respuesta o cancélela primero',
+        subscriptionInvalidPlan: 'El plan solicitado no es válido',
+        subscriptionInvalidCycle: 'Ciclo de facturación no válido',
+        subscriptionInvalidMethod: 'Método de pago no válido',
+        subscriptionRequestNotFound: 'Solicitud de suscripción no encontrada',
+        subscriptionAlreadyProcessed: 'Esta solicitud ya fue procesada',
+        subscriptionApproved: 'Pago confirmado y suscripción activada con éxito',
+        subscriptionRejected: 'Solicitud de suscripción rechazada',
+        subscriptionCancelled: 'Solicitud de suscripción cancelada',
+        subscriptionExpired: 'La suscripción de la tienda expiró — renueve para acceder al sistema',
+        subscriptionApplied: 'Suscripción de la tienda actualizada con éxito',
     },
 
     it: {
@@ -745,7 +810,20 @@ const translations = {
         purchaseOrderCreated: 'Ordine di acquisto creato con successo',
         purchaseOrderUpdated: 'Ordine di acquisto aggiornato con successo',
         purchaseOrderDeleted: 'Ordine di acquisto eliminato con successo',
-        purchaseOrderNotFound: 'Ordine di acquisto non trovato'
+        purchaseOrderNotFound: 'Ordine di acquisto non trovato',
+        // Subscription (v4.3)
+        subscriptionRequestCreated: 'Richiesta di abbonamento inviata — verrà attivata dopo la conferma del pagamento dalla piattaforma',
+        subscriptionRequestExists: 'Hai già una richiesta in sospeso — attendi la risposta o annullala prima',
+        subscriptionInvalidPlan: 'Il piano richiesto non è valido',
+        subscriptionInvalidCycle: 'Ciclo di fatturazione non valido',
+        subscriptionInvalidMethod: 'Metodo di pagamento non valido',
+        subscriptionRequestNotFound: 'Richiesta di abbonamento non trovata',
+        subscriptionAlreadyProcessed: 'Questa richiesta è già stata elaborata',
+        subscriptionApproved: 'Pagamento confermato e abbonamento attivato con successo',
+        subscriptionRejected: 'Richiesta di abbonamento rifiutata',
+        subscriptionCancelled: 'Richiesta di abbonamento annullata',
+        subscriptionExpired: 'L\u2019abbonamento del negozio è scaduto — rinnova per accedere al sistema',
+        subscriptionApplied: 'Abbonamento del negozio aggiornato con successo',
     },
 
     de: {
@@ -870,7 +948,20 @@ const translations = {
         purchaseOrderCreated: 'Bestellung erfolgreich erstellt',
         purchaseOrderUpdated: 'Bestellung erfolgreich aktualisiert',
         purchaseOrderDeleted: 'Bestellung erfolgreich gelöscht',
-        purchaseOrderNotFound: 'Bestellung nicht gefunden'
+        purchaseOrderNotFound: 'Bestellung nicht gefunden',
+        // Subscription (v4.3)
+        subscriptionRequestCreated: 'Abonnementanfrage gesendet — Aktivierung nach Zahlungsbestätigung durch die Plattform',
+        subscriptionRequestExists: 'Sie haben bereits eine offene Anfrage — warten Sie auf die Antwort oder stornieren Sie sie zuerst',
+        subscriptionInvalidPlan: 'Der angeforderte Plan ist ungültig',
+        subscriptionInvalidCycle: 'Ungültiger Abrechnungszyklus',
+        subscriptionInvalidMethod: 'Ungültige Zahlungsmethode',
+        subscriptionRequestNotFound: 'Abonnementanfrage nicht gefunden',
+        subscriptionAlreadyProcessed: 'Diese Anfrage wurde bereits verarbeitet',
+        subscriptionApproved: 'Zahlung bestätigt und Abonnement erfolgreich aktiviert',
+        subscriptionRejected: 'Abonnementanfrage abgelehnt',
+        subscriptionCancelled: 'Abonnementanfrage storniert',
+        subscriptionExpired: 'Das Shop-Abonnement ist abgelaufen — bitte erneuern, um Zugriff zu erhalten',
+        subscriptionApplied: 'Shop-Abonnement erfolgreich aktualisiert',
     },
 
     ru: {
@@ -995,7 +1086,20 @@ const translations = {
         purchaseOrderCreated: 'Заказ на закупку успешно создан',
         purchaseOrderUpdated: 'Заказ на закупку успешно обновлён',
         purchaseOrderDeleted: 'Заказ на закупку успешно удалён',
-        purchaseOrderNotFound: 'Заказ на закупку не найден'
+        purchaseOrderNotFound: 'Заказ на закупку не найден',
+        // Subscription (v4.3)
+        subscriptionRequestCreated: 'Запрос на подписку отправлен — активация после подтверждения оплаты платформой',
+        subscriptionRequestExists: 'У вас уже есть запрос на рассмотрении — дождитесь ответа или сначала отмените его',
+        subscriptionInvalidPlan: 'Запрошенный тариф недействителен',
+        subscriptionInvalidCycle: 'Недействительный цикл выставления счетов',
+        subscriptionInvalidMethod: 'Недействительный способ оплаты',
+        subscriptionRequestNotFound: 'Запрос на подписку не найден',
+        subscriptionAlreadyProcessed: 'Этот запрос уже обработан',
+        subscriptionApproved: 'Оплата подтверждена, подписка успешно активирована',
+        subscriptionRejected: 'Запрос на подписку отклонён',
+        subscriptionCancelled: 'Запрос на подписку отменён',
+        subscriptionExpired: 'Подписка магазина истекла — продлите её для доступа к системе',
+        subscriptionApplied: 'Подписка магазина успешно обновлена',
     },
 
     zh: {
@@ -1120,7 +1224,20 @@ const translations = {
         purchaseOrderCreated: '采购订单创建成功',
         purchaseOrderUpdated: '采购订单更新成功',
         purchaseOrderDeleted: '采购订单删除成功',
-        purchaseOrderNotFound: '采购订单不存在'
+        purchaseOrderNotFound: '采购订单不存在',
+        // Subscription (v4.3)
+        subscriptionRequestCreated: '订阅申请已发送 — 平台确认付款后即会激活',
+        subscriptionRequestExists: '您已有一个待处理的申请 — 请等待回复或先取消',
+        subscriptionInvalidPlan: '请求的套餐无效',
+        subscriptionInvalidCycle: '无效的计费周期',
+        subscriptionInvalidMethod: '无效的付款方式',
+        subscriptionRequestNotFound: '未找到订阅申请',
+        subscriptionAlreadyProcessed: '该申请已被处理',
+        subscriptionApproved: '付款已确认，订阅激活成功',
+        subscriptionRejected: '订阅申请已被拒绝',
+        subscriptionCancelled: '订阅申请已取消',
+        subscriptionExpired: '商店订阅已过期 — 请续订以继续使用系统',
+        subscriptionApplied: '商店订阅更新成功',
     },
 
 };

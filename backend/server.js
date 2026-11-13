@@ -212,6 +212,8 @@ app.use('/api/purchase-orders', require('./routes/purchaseOrders'));
 
 // ===== v3 — SaaS / AI / notifications / backups / audit =====
 app.use('/api/stores', require('./routes/stores'));
+// v4.3 — subscription lifecycle (store requests + super-admin billing console)
+app.use('/api/subscription', require('./routes/subscription'));
 app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/push', require('./routes/push'));
 app.use('/api/backups', require('./routes/backups'));

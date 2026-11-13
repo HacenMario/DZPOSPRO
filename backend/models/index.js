@@ -31,9 +31,11 @@ const AIUsage = require('./AIUsage');
 const PushSubscription = require('./PushSubscription');
 const BackupRecord = require('./BackupRecord');
 const PlatformSetting = require('./PlatformSetting');
+const SubscriptionRequest = require('./SubscriptionRequest');
 
 module.exports = {
     Store, User, Setting, Product, Category, Customer, Supplier, Sale, SaleItem,
     PurchaseOrder, Return, Coupon, InventoryMovement, Session, Notification,
-    AlertConfig, AuditLog, AIUsage, PushSubscription, BackupRecord, PlatformSetting
+    AlertConfig, AuditLog, AIUsage, PushSubscription, BackupRecord, PlatformSetting,
+    SubscriptionRequest
 };
