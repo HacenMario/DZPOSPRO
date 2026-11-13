@@ -91,6 +91,53 @@
     }
   }
 
+  // v4.2.1 — one login attempt. Throws ONLY on network-level errors
+  // (fetch threw); HTTP-level failures return { failed: true, msg }.
+  async function attemptLogin(email, password) {
+    const res = await fetch(`${API_BASE()}/api/auth/login`, {
+      method: 'POST',
+      headers: (function () {
+        // v4.2 — send the app language so backend validation messages follow it
+        var h = { 'Content-Type': 'application/json' };
+        var lang = 'ar';
+        try { lang = (window.currentLang || localStorage.getItem('lang') || 'ar').slice(0, 2); } catch (_) {}
+        h['Accept-Language'] = lang;
+        h['x-dzpos-lang'] = lang;
+        return h;
+      })(),
+      body: JSON.stringify({ email, password })
+    });
+    let data = null;
+    try { data = await res.json(); } catch (_) { data = {}; }
+
+    // Backend envelope: { success, message, data: { token, user } }
+    const payload = (data && data.data && data.data.token) ? data.data : data;
+    if (res.ok && payload && payload.token) {
+      try {
+        localStorage.setItem('token', payload.token);
+        localStorage.setItem('user', JSON.stringify(payload.user || {}));
+      } catch (_) {}
+      if (typeof window.Toast !== 'undefined' && window.Toast.success) {
+        window.Toast.success(window.t ? window.t('loginSuccess', 'تم تسجيل الدخول بنجاح') : 'Login successful');
+      }
+      // Brief delay so the toast can show before redirect
+      // v3.2 — super-admin lands directly on the platform console
+      const role = payload.user && payload.user.role;
+      setTimeout(() => {
+        window.location.href = role === 'superadmin' ? 'dashboard.html#platform' : 'dashboard.html';
+      }, 250);
+      return { ok: true };
+    }
+
+    // Build a helpful message. If the backend returned validation errors,
+    // surface the first field-level message instead of the generic "Validation failed".
+    let msg = (data && (data.message || data.error)) || (window.t ? window.t('loginFailed', 'فشل تسجيل الدخول') : 'Login failed');
+    if (data && Array.isArray(data.errors) && data.errors.length) {
+      msg = data.errors[0].message || msg;
+    }
+    return { ok: false, failed: true, msg };
+  }
+
   async function handleLoginSubmit(e) {
     e.preventDefault();
     clearLoginError();
@@ -104,53 +151,34 @@
     }
 
     setLoading(true);
+    let outcome = null;
     try {
-      const res = await fetch(`${API_BASE()}/api/auth/login`, {
-    method: 'POST',
-    headers: (function () {
-      // v4.2 — send the app language so backend validation messages follow it
-      var h = { 'Content-Type': 'application/json' };
-      var lang = 'ar';
-      try { lang = (window.currentLang || localStorage.getItem('lang') || 'ar').slice(0, 2); } catch (_) {}
-      h['Accept-Language'] = lang;
-      h['x-dzpos-lang'] = lang;
-      return h;
-    })(),
-    body: JSON.stringify({ email, password })
-      });
-      let data = null;
-      try { data = await res.json(); } catch (_) { data = {}; }
-
-      // Backend envelope: { success, message, data: { token, user } }
-      const payload = (data && data.data && data.data.token) ? data.data : data;
-      if (res.ok && payload && payload.token) {
-        try {
-          localStorage.setItem('token', payload.token);
-          localStorage.setItem('user', JSON.stringify(payload.user || {}));
-        } catch (_) {}
-        if (typeof window.Toast !== 'undefined' && window.Toast.success) {
-          window.Toast.success(window.t ? window.t('loginSuccess', 'تم تسجيل الدخول بنجاح') : 'Login successful');
-        }
-        // Brief delay so the toast can show before redirect
-        // v3.2 — super-admin lands directly on the platform console
-        const role = payload.user && payload.user.role;
-        setTimeout(() => {
-          window.location.href = role === 'superadmin' ? 'dashboard.html#platform' : 'dashboard.html';
-        }, 250);
-      } else {
-        // Build a helpful message. If the backend returned validation errors,
-        // surface the first field-level message instead of the generic "Validation failed".
-        let msg = (data && (data.message || data.error)) || (window.t ? window.t('loginFailed', 'فشل تسجيل الدخول') : 'Login failed');
-        if (data && Array.isArray(data.errors) && data.errors.length) {
-          msg = data.errors[0].message || msg;
-        }
-        showLoginError(msg);
-      }
+      outcome = await attemptLogin(email, password);
     } catch (err) {
       console.error('[login] error', err);
+      // v4.2.1 — self-heal: a stale/dead API base saved on the device (e.g.
+      // the OLD Railway URL) throws a network error here. Re-resolve the
+      // base and retry ONCE automatically before telling the user anything.
+      let baseChanged = false;
+      try {
+        if (typeof window.dzposReresolveApi === 'function') {
+          const oldBase = API_BASE();
+          await window.dzposReresolveApi();
+          baseChanged = API_BASE() !== oldBase;
+        }
+      } catch (_) { /* keep whatever base we have */ }
+      if (baseChanged) {
+        console.info('[login] API base healed →', API_BASE(), '— retrying login');
+        try { outcome = await attemptLogin(email, password); } catch (err2) {
+          console.error('[login] retry error', err2);
+        }
+      }
+    }
+    setLoading(false);
+    if (!outcome) {
       showLoginError(window.t ? window.t('loginServerUnreachable', 'تعذّر الوصول إلى الخادم') : 'Cannot reach server');
-    } finally {
-      setLoading(false);
+    } else if (outcome.failed) {
+      showLoginError(outcome.msg);
     }
   }
 
@@ -254,7 +282,7 @@
       dotEl.addEventListener('click', () => probeServer());
     }
     const verEl = document.querySelector('[data-i18n="version"]');
-    if (verEl) verEl.textContent = 'v4.2.0';
+    if (verEl) verEl.textContent = 'v4.2.1';
   });
 
   // Expose setTheme globally for any external caller

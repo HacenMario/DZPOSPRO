@@ -27,7 +27,14 @@
 
   // Known backend deployments — first healthy candidate wins.
   var CANDIDATES = [
-    'https://dzpospro-production-ec3f34a9.up.railway.app',
+    'https://dzpospro-production-ec3f34a9.up.railway.app'
+  ];
+  // v4.2.1 — saved bases pointing here are wiped WITHOUT probing. The old
+  // Railway domain now 404s WITH no CORS headers, so every request to it
+  // throws a network error ("تعذّر الوصول إلى الخادم" on login, Offline
+  // chip on the dashboard) — even after the user cleared browser HISTORY
+  // (history clearing does NOT remove localStorage / service workers).
+  var KNOWN_DEAD = [
     'https://dzpospro-production.up.railway.app'
   ];
   var LS_OVERRIDE = 'dzpos_api_base';
@@ -97,15 +104,20 @@
      offline — the app then shows its proper offline state). */
   async function resolveApiBase(opts) {
     opts = opts || {};
+    // 0 — v4.2.1: purge known-dead saved bases first (no network needed)
+    purgeDeadSaved();
     // 1 — explicit override wins; verify it unless asked not to
     var o = (function () { try { return stripSlash(global.localStorage.getItem(LS_OVERRIDE) || ''); } catch (e) { return ''; } })();
     if (o) {
       setResolved(o, false);
-      if (opts.verify !== false) {
-        var okOverride = await probe(o);
-        if (okOverride) setResolved(o, true);
-      }
-      return resolved;
+      if (opts.verify === false) return resolved;
+      var okOverride = await probe(o);
+      if (okOverride) { setResolved(o, true); return resolved; }
+      // v4.2.1 — the override is UNREACHABLE. Never return a dead base:
+      // wipe it and fall through to the candidate list so the app heals
+      // itself (root fix for "login unreachable + Offline after the
+      // Railway URL changed, even after clearing browser history").
+      try { global.localStorage.removeItem(LS_OVERRIDE); } catch (e) { /* private mode */ }
     }
     // 2 — build candidate list: same-origin (non-Vercel), remembered, known list
     var list = [];
@@ -120,7 +132,9 @@
       var ok = await probe(list[i]);
       if (ok) return setResolved(list[i], true);
     }
-    return resolved;
+    // 4 — v4.2.1: nothing healthy → last resort is the first known
+    // candidate (never a stale remembered/override value that just failed).
+    return setResolved(CANDIDATES[0] || '', false);
   }
 
   /* Manual override management (Connection Doctor) */
@@ -134,6 +148,18 @@
   }
   function clearOverride() { return setOverride(''); }
   function candidates() { return CANDIDATES.slice(); }
+
+  /* v4.2.1 — instantly purge saved bases (override + remembered) that point
+     to a known-dead host. Runs before any network activity so a device that
+     still stores the old Railway URL heals on the very next page load. */
+  function purgeDeadSaved() {
+    try {
+      var o = global.localStorage.getItem(LS_OVERRIDE);
+      if (o && KNOWN_DEAD.indexOf(stripSlash(o)) !== -1) global.localStorage.removeItem(LS_OVERRIDE);
+      var r = global.localStorage.getItem(LS_RESOLVED);
+      if (r && KNOWN_DEAD.indexOf(stripSlash(r)) !== -1) global.localStorage.removeItem(LS_RESOLVED);
+    } catch (e) { /* private mode */ }
+  }
 
   /* Exports */
   global.dzposApiBase = apiBase;

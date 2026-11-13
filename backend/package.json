@@ -1,6 +1,6 @@
 {
     "name": "dz-pos-pro-backend",
-    "version": "4.2.0",
+    "version": "4.2.1",
     "description": "DZ POS PRO — Multi-tenant SaaS Point of Sale backend (Node.js + Express + MongoDB + Gemini AI). Nine-language (ar/en/fr).",
     "main": "server.js",
     "scripts": {

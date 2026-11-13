@@ -53,10 +53,27 @@ const corsOrigins = (process.env.CORS_ORIGINS || 'https://dzpospro-production-ec
     .map(s => s.trim())
     .filter(Boolean);
 
+// v4.2.1 — resilient origin check (fixes "تعذّر الوصول إلى الخادم" when
+// opening the app from file:// or a local dev server):
+//   • Origin "null"            → the app opened from a local file (file://)
+//   • localhost / 127.0.0.1    → any local dev server port
+//   • 10.x / 192.168.x         → LAN testing
+//   • *.vercel.app             → production + preview deployments
+// Foreign origins are still rejected (no wildcard with credentials).
+function isAllowedOrigin(origin) {
+    if (!origin) return true;                                                          // curl / same-origin
+    if (origin === 'null') return true;                                                // file:// pages
+    if (corsOrigins.includes(origin)) return true;                                     // explicit list
+    if (/^https:\/\/([a-z0-9-]+\.)*vercel\.app$/i.test(origin)) return true;           // all Vercel domains
+    if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin)) return true;    // local dev servers
+    if (/^https?:\/\/(10|192\.168)(\.\d+){1,3}(:\d+)?$/i.test(origin)) return true;   // LAN IPs
+    return false;
+}
+
 const corsOptions = {
     origin(origin, cb) {
         // allow same-origin / curl (no Origin header) and any allow-listed origin
-        if (!origin || corsOrigins.includes(origin)) return cb(null, true);
+        if (isAllowedOrigin(origin)) return cb(null, true);
         return cb(new Error(`Origin ${origin} not allowed by CORS`));
     },
     credentials: true,
@@ -213,8 +230,10 @@ app.use(errorHandler);
 const server = http.createServer(app);
 const io = socketIo(server, {
     cors: {
+        // v4.2.1 — same resilient origin check as the HTTP layer (file://,
+        // localhost, LAN and Vercel previews must be able to open realtime too)
         origin(origin, cb) {
-            if (!origin || corsOrigins.includes(origin)) return cb(null, true);
+            if (isAllowedOrigin(origin)) return cb(null, true);
             return cb(new Error('Not allowed by CORS'));
         },
         methods: ['GET', 'POST'],
