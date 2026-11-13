@@ -1,8 +1,9 @@
 /* ============================================================
- * js/i18n.js — Trilingual i18n (ar / en / fr) with RTL support
+ * js/i18n.js — Nine-language i18n (ar/en/fr/tr/es/it/de/ru/zh)
+ * with per-language RTL support (Arabic → RTL)
  * ------------------------------------------------------------
  * Exposes:
- *   window.translations          — { ar: {...}, en: {...}, fr: {...} }
+ *   window.translations          — { ar: {...}, en: {...}, ... }
  *   window.currentLang           — active language code
  *   window.t(key, fallback?)     — translate a key
  *   window.loadLanguage(lang)    — fetch + cache a lang JSON
@@ -10,17 +11,19 @@
  *   window.setLanguage(lang)     — load + apply + dispatch event + re-render
  *   window.initI18n()            — restore saved language and apply
  *   window.updateI18n(lang)      — alias of setLanguage (back-compat)
+ *   window.SUPPORTED_LANGS       — the 9 supported language codes
  *
  * Dispatches a `languagechange` event on window whenever the
  * active language changes. Modules can listen for it to
- * re-render their content.
+ * re-render their content. Flag switchers live in js/flags.js.
  * ============================================================ */
 
 (function (global) {
   'use strict';
 
-  const SUPPORTED = ['ar', 'en', 'fr'];
+  const SUPPORTED = ['ar', 'en', 'fr', 'tr', 'es', 'it', 'de', 'ru', 'zh'];
   const RTL_LANGS = ['ar'];
+  global.SUPPORTED_LANGS = SUPPORTED.slice();
 
   const translations = {};
   let currentLang = (function () {
@@ -87,9 +90,7 @@
       if (val !== undefined) el.setAttribute('aria-label', val);
     });
 
-    // Keep <select id="langSelect"> in sync
-    const sel = document.getElementById('langSelect');
-    if (sel && sel.value !== lang) sel.value = lang;
+    // (flag switchers re-render themselves on the languagechange event)
   }
 
   /**

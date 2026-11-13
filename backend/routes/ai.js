@@ -1,4 +1,5 @@
-// backend/routes/ai.js — Gemini AI features (admin + manager).
+// backend/routes/ai.js — AI features. v4: insights (Smart Engine) allowed for
+// every role; generative features stay admin+manager.
 const express = require('express');
 const router = express.Router();
 const authMiddleware = require('../middleware/auth');
@@ -6,6 +7,9 @@ const tenantMiddleware = require('../middleware/tenant');
 const roleMiddleware = require('../middleware/role');
 const upload = require('./../middleware/upload');
 const controller = require('../controllers/aiController');
+
+// v4 — free built-in Smart Engine insights: works for everyone, no key needed.
+router.get('/insights', authMiddleware, tenantMiddleware, roleMiddleware('admin', 'manager', 'cashier'), controller.insights);
 
 router.use(authMiddleware, tenantMiddleware, roleMiddleware('admin', 'manager'));
 

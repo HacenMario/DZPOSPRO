@@ -1,7 +1,7 @@
 {
   "name": "dzpospro",
-  "version": "3.1.0",
-  "description": "DZ POS PRO v3.1 — Multi-tenant SaaS Point of Sale (Express + MongoDB + Gemini AI). Trilingual ar/en/fr.",
+  "version": "4.0.0",
+  "description": "DZ POS PRO v4.0 — Multi-tenant SaaS POS (Express + MongoDB + AI). 9 languages ar/en/fr/tr/es/it/de/ru/zh.",
   "main": "backend/server.js",
   "engines": {
     "node": ">=16.0.0"

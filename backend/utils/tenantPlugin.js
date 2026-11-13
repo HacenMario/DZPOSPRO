@@ -86,7 +86,10 @@ function tenantPlugin(schema) {
  */
 function tenantScope() {
     const ctx = getTenantContext();
-    if (!ctx || ctx.isSuper || !ctx.storeId) return {};
+    // v4 — scope whenever a concrete storeId is in context, even for the
+    // super-admin in "store focus" mode (X-Store-Id). Plain platform requests
+    // (no header) keep the unfiltered behaviour.
+    if (!ctx || !ctx.storeId) return {};
     return { storeId: ctx.storeId };
 }
 

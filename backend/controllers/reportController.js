@@ -6,6 +6,7 @@ const Customer = require('../models/Customer');
 const { getTranslation } = require('../config/i18n');
 const logger = require('../utils/logger');
 const { successResponse, errorResponse } = require('../utils/response');
+const { tenantScope } = require('../utils/tenantPlugin');
 
 const parseRange = (query) => {
     const now = new Date();
@@ -287,8 +288,8 @@ const getInventoryReport = async (req, res, next) => {
 
 /* ============================================================
  * v3 — Executive KPI + Profitability (tenant-scoped)
+ * (tenantScope is imported at the top of this file since v4)
  * ============================================================ */
-const tenantScope = require('../utils/tenantPlugin').tenantScope;
 
 // GET /api/reports/kpi?days=30
 const getKpi = async (req, res, next) => {
@@ -408,6 +409,75 @@ const getProfitability = async (req, res, next) => {
     } catch (err) { next(err); }
 };
 
+// GET /api/reports/charts?days=30 — v4 unified chart pack for the dashboard:
+// daily revenue+profit trend, category share, payment mix, top products.
+const getCharts = async (req, res, next) => {
+    try {
+        const lang = req.lang || 'ar';
+        const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 1), 180);
+        const since = new Date(Date.now() - days * 24 * 3600 * 1000);
+        const scope = tenantScope();
+        const storeJoin = scope.storeId ? { '_s.storeId': scope.storeId } : {};
+
+        const [dailyRev, dailyProfit, categoryShare, paymentMix, topProducts] = await Promise.all([
+            // revenue + count per day
+            Sale.aggregate([
+                { $match: { status: { $nin: ['cancelled'] }, saleDate: { $gte: since }, ...scope } },
+                { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$saleDate' } }, revenue: { $sum: '$total' }, cost: { $sum: { $ifNull: ['$costTotal', 0] } }, count: { $sum: 1 } } },
+                { $sort: { _id: 1 } }
+            ]),
+            // profit per day from items (costPrice at sale time)
+            SaleItem.aggregate([
+                { $lookup: { from: 'sales', localField: 'sale', foreignField: '_id', as: '_s' } },
+                { $unwind: '$_s' },
+                { $match: { '_s.status': { $nin: ['cancelled'] }, '_s.saleDate': { $gte: since }, ...storeJoin } },
+                { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$_s.saleDate' } }, profit: { $sum: { $subtract: ['$total', { $multiply: ['$costPrice', '$quantity'] }] } } } }
+            ]),
+            // category share by revenue
+            SaleItem.aggregate([
+                { $lookup: { from: 'sales', localField: 'sale', foreignField: '_id', as: '_s' } },
+                { $unwind: '$_s' },
+                { $match: { '_s.status': { $nin: ['cancelled'] }, '_s.saleDate': { $gte: since }, ...storeJoin } },
+                { $lookup: { from: 'products', localField: 'product', foreignField: '_id', as: '_p' } },
+                { $unwind: { path: '$_p', preserveNullAndEmptyArrays: true } },
+                { $group: { _id: '$_p.category', revenue: { $sum: '$total' } } },
+                { $lookup: { from: 'categories', localField: '_id', foreignField: '_id', as: '_c' } },
+                { $project: { name: { $ifNull: [{ $arrayElemAt: ['$_c.name', 0] }, '—'] }, revenue: { $round: ['$revenue', 2] } } },
+                { $sort: { revenue: -1 } }, { $limit: 8 }
+            ]),
+            Sale.aggregate([
+                { $match: { status: { $nin: ['cancelled'] }, saleDate: { $gte: since }, ...scope } },
+                { $group: { _id: '$paymentMethod', revenue: { $sum: '$total' }, count: { $sum: 1 } } },
+                { $sort: { revenue: -1 } }
+            ]),
+            SaleItem.aggregate([
+                { $lookup: { from: 'sales', localField: 'sale', foreignField: '_id', as: '_s' } },
+                { $unwind: '$_s' },
+                { $match: { '_s.status': { $nin: ['cancelled'] }, '_s.saleDate': { $gte: since }, ...storeJoin } },
+                { $group: { _id: '$productName', qty: { $sum: '$quantity' }, revenue: { $sum: '$total' } } },
+                { $sort: { revenue: -1 } }, { $limit: 7 }
+            ])
+        ]);
+
+        const profitMap = new Map(dailyProfit.map(d => [d._id, d.profit]));
+        const revenueByDay = dailyRev.map(d => ({
+            date: d._id,
+            revenue: Math.round((d.revenue || 0) * 100) / 100,
+            profit: Math.round((profitMap.get(d._id) || 0) * 100) / 100,
+            count: d.count
+        }));
+
+        void lang;
+        return successResponse(res, {
+            days,
+            revenueByDay,
+            categoryShare: categoryShare.map(c => ({ name: typeof c.name === 'object' ? (c.name?.[lang] || c.name?.ar || '—') : (c.name || '—'), revenue: c.revenue })),
+            paymentMix: paymentMix.map(p => ({ method: p._id || '—', revenue: Math.round((p.revenue || 0) * 100) / 100, count: p.count })),
+            topProducts: topProducts.map(t => ({ name: t._id || '—', qty: t.qty, revenue: Math.round((t.revenue || 0) * 100) / 100 }))
+        });
+    } catch (err) { next(err); }
+};
+
 // Alert config CRUD are in alertConfigController — keep reports focused.
 
 module.exports = {
@@ -417,5 +487,6 @@ module.exports = {
     getCustomersReport,
     getInventoryReport,
     getKpi,
-    getProfitability
+    getProfitability,
+    getCharts
 };

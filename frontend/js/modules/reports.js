@@ -47,6 +47,7 @@ let state = {
   productsReport: [],   // /api/reports/products → data.topProducts
   customersReport: [],  // /api/reports/customers → data.topCustomers
   inventoryReport: null,// /api/reports/inventory → data
+  chartPack: null,      // /api/reports/charts → data (v4 chart pack)
   settings: null,       // /api/settings → data.settings
   charts: []
 };
@@ -379,44 +380,65 @@ function renderCharts() {
   ChartCtor.defaults.color = txtColor;
   ChartCtor.defaults.font.family = (getComputedStyle(document.body).fontFamily) || 'system-ui, sans-serif';
 
-  /* --- Sales trend (line + gradient fill) --- */
+  /* --- Sales trend (line + gradient fill) + v4 profit overlay --- */
   const trendCanvas = document.getElementById('chartSalesTrend');
   if (trendCanvas) {
     const days = Array.isArray(s.salesByDay) ? s.salesByDay : [];
+    const pack = state.chartPack || null;
+    const profitByDate = new Map();
+    if (pack && Array.isArray(pack.revenueByDay)) {
+      pack.revenueByDay.forEach(r => profitByDate.set(r.date, Number(r.profit || 0)));
+    }
     const labels = days.map(d => fmtDateShort(d.date));
     const revenues = days.map(d => Number(d.revenue || 0));
     const counts = days.map(d => Number(d.count || 0));
+    const profits = days.map(d => profitByDate.get(d.date));
+    const hasProfit = profits.some(v => v !== undefined);
     const ctx = trendCanvas.getContext('2d');
     const gradient = ctx.createLinearGradient(0, 0, 0, 300);
     gradient.addColorStop(0, 'rgba(16,185,129,0.35)');
     gradient.addColorStop(1, 'rgba(16,185,129,0.00)');
+    const datasets = [{
+      label: t('totalRevenue', 'Total revenue'),
+      data: revenues,
+      borderColor: '#10b981',
+      backgroundColor: gradient,
+      borderWidth: 2,
+      tension: 0.35,
+      fill: true,
+      pointBackgroundColor: '#10b981',
+      pointRadius: 3,
+      pointHoverRadius: 5
+    }];
+    if (hasProfit) {
+      datasets.push({
+        label: t('grossProfit', 'Profit'),
+        data: profits.map(v => v === undefined ? null : v),
+        borderColor: '#6366f1',
+        backgroundColor: 'rgba(99,102,241,0.12)',
+        borderWidth: 2,
+        tension: 0.35,
+        fill: false,
+        borderDash: [5, 4],
+        pointBackgroundColor: '#6366f1',
+        pointRadius: 2.5,
+        pointHoverRadius: 5,
+        spanGaps: true
+      });
+    }
     state.charts.push(new ChartCtor(trendCanvas, {
       type: 'line',
-      data: {
-        labels,
-        datasets: [{
-          label: t('totalRevenue', 'Total revenue'),
-          data: revenues,
-          borderColor: '#10b981',
-          backgroundColor: gradient,
-          borderWidth: 2,
-          tension: 0.35,
-          fill: true,
-          pointBackgroundColor: '#10b981',
-          pointRadius: 3,
-          pointHoverRadius: 5
-        }]
-      },
+      data: { labels, datasets },
       options: {
         responsive: true, maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
         plugins: {
-          legend: { display: false },
+          legend: { display: hasProfit, labels: { color: txtColor, boxWidth: 12, font: { size: 12 } } },
           tooltip: {
             callbacks: {
               title: (items) => items && items.length ? fmtDate(days[items[0].dataIndex].date) : '',
-              label: (c) => fmtCurrency(c.parsed.y),
-              afterLabel: (c) => t('qtySold', 'Qty sold') + ': ' + (counts[c.dataIndex] || 0)
+              label: (c) => c.dataset.label + ': ' + fmtCurrency(c.parsed.y),
+              afterLabel: (c) => c.datasetIndex === 0 ? (t('qtySold', 'Qty sold') + ': ' + (counts[c.dataIndex] || 0)) : ''
             }
           }
         },
@@ -431,7 +453,9 @@ function renderCharts() {
   /* --- Sales by category (doughnut, legend on the side) --- */
   const catCanvas = document.getElementById('chartCategory');
   if (catCanvas) {
-    const cats = Array.isArray(s.salesByCategory) ? s.salesByCategory : [];
+    const packCats = (state.chartPack && Array.isArray(state.chartPack.categoryShare))
+      ? state.chartPack.categoryShare.map(c => ({ name: c.name, revenue: c.revenue })) : [];
+    const cats = (Array.isArray(s.salesByCategory) && s.salesByCategory.length) ? s.salesByCategory : packCats;
     const total = cats.reduce((sum, c) => sum + Number(c.revenue || c.total || 0), 0);
     state.charts.push(new ChartCtor(catCanvas, {
       type: 'doughnut',
@@ -470,7 +494,9 @@ function renderCharts() {
   /* --- Sales by payment method (vertical bar) --- */
   const payCanvas = document.getElementById('chartPayment');
   if (payCanvas) {
-    const pays = Array.isArray(s.salesByPaymentMethod) ? s.salesByPaymentMethod : [];
+    const packPays = (state.chartPack && Array.isArray(state.chartPack.paymentMix))
+      ? state.chartPack.paymentMix.map(p => ({ method: p.method, total: p.revenue })) : [];
+    const pays = (Array.isArray(s.salesByPaymentMethod) && s.salesByPaymentMethod.length) ? s.salesByPaymentMethod : packPays;
     const labels = pays.map(p => t((p.method || '').toLowerCase(), p.method || '—'));
     const data = pays.map(p => Number(p.total || 0));
     const colors = pays.map(p => PAYMENT_COLORS[(p.method || '').toLowerCase()] || PAYMENT_COLORS.other);
@@ -505,7 +531,10 @@ function renderCharts() {
   /* --- Top 5 products (horizontal bar, revenue on x-axis) --- */
   const topCanvas = document.getElementById('chartTopProducts');
   if (topCanvas) {
-    const top = (state.productsReport || []).slice(0, 5);
+    const packTop = (state.chartPack && Array.isArray(state.chartPack.topProducts))
+      ? state.chartPack.topProducts.map(p => ({ name: p.productName || p.name, revenue: p.revenue })) : [];
+    const srcTop = (state.productsReport && state.productsReport.length) ? state.productsReport : packTop;
+    const top = srcTop.slice(0, 5);
     state.charts.push(new ChartCtor(topCanvas, {
       type: 'bar',
       data: {
@@ -663,13 +692,16 @@ function renderEmpty() {
 async function fetchAll() {
   state.loading = true;
   const qs = { from: state.from, to: state.to };
+  // v4 — trailing days for the chart pack endpoint (1..180)
+  const packDays = Math.min(Math.max(Math.round((new Date(state.to) - new Date(state.from)) / 86400000) || 30, 1), 180);
   try {
-    const [sum, prod, cust, inv, settingsRes] = await Promise.all([
+    const [sum, prod, cust, inv, settingsRes, chartPack] = await Promise.all([
       apiFetch.get('/api/reports/summary', qs).catch((e) => { console.warn('[reports] summary', e); return null; }),
       apiFetch.get('/api/reports/products', Object.assign({ limit: 10 }, qs)).catch((e) => { console.warn('[reports] products', e); return null; }),
       apiFetch.get('/api/reports/customers', Object.assign({ limit: 10 }, qs)).catch((e) => { console.warn('[reports] customers', e); return null; }),
       apiFetch.get('/api/reports/inventory', {}).catch((e) => { console.warn('[reports] inventory', e); return null; }),
-      apiFetch.get('/api/settings').catch((e) => { console.warn('[reports] settings', e); return null; })
+      apiFetch.get('/api/settings').catch((e) => { console.warn('[reports] settings', e); return null; }),
+      apiFetch.get('/api/reports/charts', { days: packDays }).catch((e) => { console.warn('[reports] charts', e); return null; })
     ]);
 
     if (sum && sum.success) {
@@ -704,6 +736,9 @@ async function fetchAll() {
     } else {
       state.settings = null;
     }
+
+    // v4 — unified chart pack (revenue/profit trend + category share + payment mix + top products)
+    state.chartPack = (chartPack && chartPack.success && chartPack.data) || null;
   } catch (e) {
     console.error('[reports] fetchAll', e);
     if (window.Toast) window.Toast.error((e && e.message) || t('error', 'Error'));
@@ -711,6 +746,7 @@ async function fetchAll() {
     state.productsReport = [];
     state.customersReport = [];
     state.inventoryReport = null;
+    state.chartPack = null;
   } finally {
     state.loading = false;
   }

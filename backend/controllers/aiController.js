@@ -1,7 +1,8 @@
 // backend/controllers/aiController.js
-// DZ POS PRO v3 — AI features endpoints (all tenant-scoped).
+// DZ POS PRO v4 — AI features endpoints (all tenant-scoped).
 const aiService = require('../services/aiService');
 const gemini = require('../services/geminiService');
+const smartEngine = require('../services/smartEngine');
 const { successResponse, errorResponse } = require('../utils/response');
 const { getTranslation } = require('../config/i18n');
 const logger = require('../utils/logger');
@@ -139,11 +140,30 @@ const dailySummary = async (req, res, next) => {
     }
 };
 
-// GET /api/ai/status  — is AI configured? quota left?
+// GET /api/ai/insights — v4 Smart Engine: deep inventory/business analysis.
+// Works ALWAYS (no API key needed, no quota). Free built-in professional AI.
+const insights = async (req, res, next) => {
+    try {
+        const lang = req.lang || 'ar';
+        const result = await smartEngine.generateInsights(lang);
+        return successResponse(res, result);
+    } catch (err) {
+        logger.error('AI insights error:', err.message);
+        next(err);
+    }
+};
+
+// GET /api/ai/status  — is AI configured? quota left? engine ready?
 const status = async (req, res) => {
     const hasKey = !!(await gemini.resolveApiKey());
     const quota = req.isSuper ? { allowed: true, remaining: -1, used: -1, limit: -1 } : await gemini.checkQuota(req.storeId, req.store);
-    return successResponse(res, { configured: hasKey, model: gemini.DEFAULT_MODEL, quota });
+    return successResponse(res, {
+        configured: hasKey,
+        model: gemini.DEFAULT_MODEL,
+        fallbackModels: gemini.MODEL_CHAIN,
+        engineReady: true,
+        quota
+    });
 };
 
-module.exports = { ask, ocrInvoice, forecast, anomalies, dailySummary, status };
+module.exports = { ask, ocrInvoice, forecast, anomalies, dailySummary, insights, status };

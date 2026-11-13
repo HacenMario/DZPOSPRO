@@ -381,14 +381,10 @@ async function loadPage(page) {
     // v3 — hide role-restricted nav items
     applyRoleNavVisibility();
 
-    // Language selector
-    const langSel = document.getElementById('langSelect');
-    if (langSel) {
-      try { langSel.value = localStorage.getItem('lang') || 'ar'; } catch (_) {}
-      langSel.addEventListener('change', () => {
-        if (typeof window.setLanguage === 'function') window.setLanguage(langSel.value);
-      });
-    }
+    // v4 — Language: the flag switcher (js/flags.js) binds itself to
+    // [data-lang-switcher]; re-run defensively in case the topbar was
+    // injected after DOMContentLoaded.
+    if (typeof window.initLangSwitchers === 'function') window.initLangSwitchers();
 
     // Sidebar nav links
     document.querySelectorAll('.sidebar-nav .nav-item').forEach(link => {

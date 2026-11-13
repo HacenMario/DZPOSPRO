@@ -325,7 +325,7 @@ global.sendStoreNotification = (storeId, notification) => {
         logger.info(`DZ POS PRO API listening on port ${PORT} (${NODE_ENV})`);
         logger.info(`Socket.io attached to same port`);
         logger.info(`CORS origins: ${corsOrigins.join(', ')}`);
-        logger.info(`Languages: ar / en / fr`);
+        logger.info(`Languages: ar / en / fr / tr / es / it / de / ru / zh`);
     });
 })();
 

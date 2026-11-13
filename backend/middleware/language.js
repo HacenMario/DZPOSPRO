@@ -2,7 +2,7 @@
 // Detects request language from the Accept-Language header (or ?lang=) and
 // attaches it as req.lang. Defaults to 'ar'. Must be registered very early,
 // before any route handler that reads req.lang.
-const SUPPORTED = ['ar', 'en', 'fr'];
+const SUPPORTED = ['ar', 'en', 'fr', 'tr', 'es', 'it', 'de', 'ru', 'zh'];
 
 const languageMiddleware = (req, res, next) => {
     let lang = null;

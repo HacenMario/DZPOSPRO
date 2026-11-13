@@ -5,9 +5,11 @@
 // transparently scope every query/mutation to the user's store.
 //
 //  • superadmin users → context { isSuper: true } (platform-wide access)
+//  • superadmin + X-Store-Id header → scoped to that store (store focus)
 //  • suspended store  → 403 unless the request is from a super-admin
 //  • normal users     → context { storeId: user.storeId }
 const { runWithTenant } = require('../services/tenantContext');
+const mongoose = require('mongoose');
 const Store = require('../models/Store');
 const { getTranslation } = require('../config/i18n');
 const logger = require('../utils/logger');
@@ -39,6 +41,17 @@ const tenantMiddleware = (req, res, next) => {
 
     // Super-admin — platform context, no filtering.
     if (user.role === 'superadmin') {
+        // v4 — OPTIONAL store focus: when the platform owner browses a specific
+        // store (store switcher), the frontend sends X-Store-Id. Every query
+        // then runs scoped to that store so pages behave exactly like they do
+        // for the store's own team — while keeping full platform rights.
+        const focus = (req.get('X-Store-Id') || req.query.storeId || '').toString().trim();
+        if (focus && mongoose.Types.ObjectId.isValid(focus)) {
+            req.storeId = mongoose.Types.ObjectId(focus);
+            req.isSuper = true;
+            req.storeFocus = req.storeId;
+            return runWithTenant({ storeId: req.storeId, isSuper: true }, () => next());
+        }
         req.storeId = null;
         req.isSuper = true;
         return runWithTenant({ storeId: null, isSuper: true }, () => next());

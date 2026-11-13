@@ -12,7 +12,7 @@
  *     app is closed / screen is off (installed PWA)
  * ============================================================ */
 
-const VERSION = 'v3.0.0';
+const VERSION = 'v4.0.0';
 const SHELL_CACHE = `dzpos-shell-${VERSION}`;
 const STATIC_CACHE = `dzpos-static-${VERSION}`;
 const API_CACHE = `dzpos-api-${VERSION}`;
@@ -34,6 +34,7 @@ const SHELL_ASSETS = [
     './js/toast.js',
     './js/api.js',
     './js/socket.js',
+    './js/flags.js',
     './js/i18n.js',
     './js/db.js',
     './js/pwa.js',
@@ -65,6 +66,12 @@ const SHELL_ASSETS = [
     './lang/ar.json',
     './lang/en.json',
     './lang/fr.json',
+    './lang/tr.json',
+    './lang/es.json',
+    './lang/it.json',
+    './lang/de.json',
+    './lang/ru.json',
+    './lang/zh.json',
     './icons/icon-192.png',
     './icons/icon-512.png',
     './icons/icon-maskable-512.png',

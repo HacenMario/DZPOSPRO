@@ -13,5 +13,7 @@ router.get('/customers', authMiddleware, tenantMiddleware, roleMiddleware('admin
 router.get('/inventory', authMiddleware, tenantMiddleware, roleMiddleware('admin', 'manager'), reportController.getInventoryReport);
 router.get('/kpi', authMiddleware, tenantMiddleware, roleMiddleware('admin', 'manager', 'cashier'), reportController.getKpi);
 router.get('/profitability', authMiddleware, tenantMiddleware, roleMiddleware('admin', 'manager'), reportController.getProfitability);
+// v4 — unified chart pack (revenue/profit trend, categories, payments, top products)
+router.get('/charts', authMiddleware, tenantMiddleware, roleMiddleware('admin', 'manager', 'cashier'), reportController.getCharts);
 
 module.exports = router;

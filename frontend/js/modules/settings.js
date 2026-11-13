@@ -492,12 +492,31 @@ function renderAppearanceTab() {
         </div>
 
         <div class="form-group">
-          <label class="form-label" for="langSelectSetting">${t('language', 'Language')}</label>
-          <select class="select" id="langSelectSetting" style="max-width:240px;">
-            <option value="ar" ${curLang === 'ar' ? 'selected' : ''}>العربية</option>
-            <option value="en" ${curLang === 'en' ? 'selected' : ''}>English</option>
-            <option value="fr" ${curLang === 'fr' ? 'selected' : ''}>Français</option>
-          </select>
+          <label class="form-label">${t('language', 'Language')} · ${t('langManagerSubtitle', 'فعّل أو أوقف أي لغة من لغات النظام التسع')}</label>
+          <div class="lang-manager" id="langManager">
+            ${(function(){
+              const enabled = (typeof window.dzposEnabledLangs === 'function') ? window.dzposEnabledLangs() : ['ar','en','fr'];
+              const meta = (typeof window.DZPOS_LANGS !== 'undefined') ? window.DZPOS_LANGS : null;
+              const order = ['ar','en','fr','tr','es','it','de','ru','zh'];
+              const flagOf = (typeof window.dzposFlagSvg === 'function') ? window.dzposFlagSvg : function(){ return '<span class="lang-flag"></span>'; };
+              return order.map(code => {
+                const m = meta ? meta[code] : { name: code, dir: code === 'ar' ? 'rtl' : 'ltr' };
+                const on = enabled.indexOf(code) !== -1;
+                return `<div class="lang-row${code === curLang ? ' current' : ''}${on ? '' : ' off'}" data-lang-code="${code}">
+                  ${flagOf(code)}
+                  <div class="lang-row-info">
+                    <span class="lang-row-name">${m.name}</span>
+                    <span class="lang-row-sub">${code.toUpperCase()} · ${m.dir.toUpperCase()}</span>
+                  </div>
+                  <label class="switch" title="${t('langToggleTitle', 'تفعيل/تعطيل هذه اللغة')}">
+                    <input type="checkbox" class="lang-toggle" data-lang-toggle="${code}" ${on ? 'checked' : ''}/>
+                    <span class="switch-slider"><span class="switch-on">${t('on', 'تشغيل')}</span><span class="switch-off">${t('off', 'إيقاف')}</span></span>
+                  </label>
+                </div>`;
+              }).join('');
+            })()}
+          </div>
+          <div class="help-text">${t('langManagerHelp', 'اللغات المفعّلة تظهر في مُبدّل اللغة أعلى الصفحة وفي شاشة الدخول. العربية لا تُوقف لأنها اللغة الافتراضية.')}</div>
         </div>
 
         <div class="form-group">
@@ -533,17 +552,27 @@ function bindAppearanceTab() {
       });
     });
   });
-  const langSel = document.getElementById('langSelectSetting');
-  if (langSel) {
-    langSel.addEventListener('change', () => {
-      const lang = langSel.value;
-      if (typeof window.setLanguage === 'function') {
-        window.setLanguage(lang);
-      } else {
-        try { localStorage.setItem('lang', lang); } catch (_) {}
+  // v4 — Languages manager: On/Off toggles per language
+  document.querySelectorAll('.lang-toggle').forEach(tog => {
+    tog.addEventListener('change', () => {
+      const code = tog.dataset.langToggle;
+      const on = tog.checked;
+      const row = tog.closest('.lang-row');
+      if (!on && code === 'ar') {
+        tog.checked = true;
+        if (window.Toast) window.Toast.warning(t('langArAlwaysOn', 'العربية هي اللغة الافتراضية ولا يمكن إيقافها'));
+        return;
       }
+      if (!on && (typeof window.dzposEnabledLangs === 'function') && window.dzposEnabledLangs().length <= 1) {
+        tog.checked = true;
+        if (window.Toast) window.Toast.warning(t('langMinOne', 'يجب إبقاء لغة واحدة مفعّلة على الأقل'));
+        return;
+      }
+      if (typeof window.dzposSetLangEnabled === 'function') window.dzposSetLangEnabled(code, on);
+      if (row) row.classList.toggle('off', !on);
+      if (window.Toast) window.Toast.success(t('langListUpdated', 'تم تحديث قائمة اللغات'));
     });
-  }
+  });
   const sbDef = document.getElementById('sidebarDefaultSetting');
   if (sbDef) {
     sbDef.addEventListener('change', () => {

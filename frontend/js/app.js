@@ -176,13 +176,10 @@ const res = await fetch(`${API_BASE}/api/auth/login`, {
     document.documentElement.setAttribute('data-theme', savedTheme);
     updateThemeIcon(savedTheme);
 
-    // Restore language (initI18n in i18n.js already runs on script load,
-    // but make sure the <select> reflects the saved value)
-    const langSel = document.getElementById('langSelect');
-    if (langSel) {
-      try { langSel.value = localStorage.getItem('lang') || 'ar'; } catch (_) {}
-      langSel.addEventListener('change', () => setLanguage(langSel.value));
-    }
+    // Restore language (initI18n in i18n.js already runs on script load).
+    // v4 — the flag switcher (js/flags.js) binds itself; just make sure the
+    // component exists even if DOMContentLoaded raced ahead of us.
+    if (typeof window.initLangSwitchers === 'function') window.initLangSwitchers();
 
     // Theme toggle
     const themeBtn = document.getElementById('themeToggle');

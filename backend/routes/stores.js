@@ -7,6 +7,7 @@ const storeController = require('../controllers/storeController');
 
 router.use(authMiddleware, roleMiddleware('superadmin'));
 router.get('/', storeController.list);
+router.get('/brief', storeController.brief);
 router.get('/platform-stats', storeController.platformStats);
 router.get('/platform-overview', storeController.platformOverview);
 router.post('/', storeController.create);

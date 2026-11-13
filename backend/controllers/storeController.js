@@ -38,6 +38,22 @@ const list = async (req, res, next) => {
     } catch (err) { next(err); }
 };
 
+// GET /api/stores/brief — lightweight list for the super-admin store switcher
+// (must be declared BEFORE /:id in the router).
+const brief = async (req, res, next) => {
+    try {
+        const stores = await Store.find({}).sort({ name: 1 })
+            .select('name plan status trialEndsAt').lean();
+        return successResponse(res, {
+            data: stores.map(s => ({
+                id: s._id, name: s.name, plan: s.plan, status: s.status,
+                trialEndsAt: s.trialEndsAt
+            })),
+            total: stores.length
+        });
+    } catch (err) { next(err); }
+};
+
 // GET /api/stores/platform-stats — platform KPIs for super-admin home
 const platformStats = async (req, res, next) => {
     try {
@@ -212,9 +228,37 @@ const platformOverview = async (req, res, next) => {
             AuditLog.find({}).sort({ createdAt: -1 }).limit(8).select('userName action entity summary createdAt').lean()
         ]);
         const rev = salesAgg[0] || { revenue: 0, count: 0 };
+
+        // v4 — richer platform home data: 30-day daily revenue trend,
+        // plan distribution and top stores by 30-day revenue.
+        const [trendRaw, planDist, topStores30, usersByRole] = await Promise.all([
+            Sale.aggregate([
+                { $match: { status: { $nin: ['cancelled'] }, saleDate: { $gte: new Date(Date.now() - 30 * 24 * 3600 * 1000) } } },
+                { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$saleDate' } }, revenue: { $sum: '$total' }, count: { $sum: 1 } } },
+                { $sort: { _id: 1 } }
+            ]),
+            Store.aggregate([{ $group: { _id: '$plan', count: { $sum: 1 } } }]),
+            Sale.aggregate([
+                { $match: { status: { $nin: ['cancelled'] }, saleDate: { $gte: new Date(Date.now() - 30 * 24 * 3600 * 1000) } } },
+                { $group: { _id: '$storeId', revenue: { $sum: '$total' }, count: { $sum: 1 } } },
+                { $sort: { revenue: -1 } }, { $limit: 8 }
+            ]),
+            User.aggregate([{ $match: { role: { $ne: 'superadmin' } } }, { $group: { _id: '$role', count: { $sum: 1 } } }])
+        ]);
+        const topIds = topStores30.map(t => t._id).filter(Boolean);
+        const topDocs = topIds.length ? await Store.find({ _id: { $in: topIds } }).select('name').lean() : [];
+        const topNameMap = new Map(topDocs.map(d => [String(d._id), d.name]));
+
         return successResponse(res, {
             stores: { total: stores, active, suspended, trial, trialEndingSoon },
             users, products,
+            usersByRole: usersByRole.map(r => ({ role: r._id, count: r.count })),
+            planDistribution: planDist.map(p => ({ plan: p._id, count: p.count })),
+            trend: trendRaw.map(t => ({ date: t._id, revenue: Math.round((t.revenue || 0) * 100) / 100, count: t.count })),
+            topStores: topStores30.map(t => ({
+                storeId: t._id, name: topNameMap.get(String(t._id)) || '—',
+                revenue: Math.round((t.revenue || 0) * 100) / 100, count: t.count
+            })),
             revenue: Math.round((rev.revenue || 0) * 100) / 100,
             salesCount: rev.count || 0,
             aiCallsToday: aiToday,
@@ -346,4 +390,4 @@ const loginAs = async (req, res, next) => {
     } catch (err) { next(err); }
 };
 
-module.exports = { list, platformStats, platformOverview, getDetails, listUsers, patchStoreUser, removeStoreUser, extendTrial, loginAs, create, update, remove, addUser };
+module.exports = { list, brief, platformStats, platformOverview, getDetails, listUsers, patchStoreUser, removeStoreUser, extendTrial, loginAs, create, update, remove, addUser };

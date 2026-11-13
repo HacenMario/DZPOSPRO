@@ -1,13 +1,16 @@
 /* ============================================================
- * js/modules/ai.js — AI Center (v3)
+ * js/modules/ai.js — AI Center (v4)
  * ------------------------------------------------------------
  * Tabs:
- *   1. assistant  — "اسأل مخزنك" chat (Gemini, store data grounded)
- *   2. forecast   — sales forecast + restock suggestions table
- *   3. anomalies  — security findings + AI interpretation
- *   4. ocr        — supplier invoice photo → products + draft PO
- *   5. summary    — smart daily summary (manual trigger)
- * Roles: admin + manager (route-enforced server side too).
+ *   0. insights  — 🧠 Smart Insights (built-in Smart Engine: 100% free,
+ *                  no API key, deep inventory + sales + customers analysis,
+ *                  health score, prioritized actionable recommendations)
+ *   1. assistant — "اسأل مخزنك" chat (Gemini, local engine fallback)
+ *   2. forecast  — sales forecast + restock suggestions table
+ *   3. anomalies — security findings + AI interpretation
+ *   4. ocr       — supplier invoice photo → products + draft PO
+ *   5. summary   — smart daily summary (manual trigger)
+ * Insights work for EVERY role; generative tabs stay admin+manager.
  * Exports: renderAiPage({ apiBase })
  * ============================================================ */
 
@@ -21,7 +24,8 @@ export async function renderAiPage(ctx) {
     <div class="ai-page">
       <div class="ai-status-bar" id="aiStatusBar"></div>
       <div class="tabs-bar" id="aiTabs">
-        <button class="tab-btn active" data-tab="assistant">💬 ${t('aiAssistant', 'المساعد الذكي')}</button>
+        <button class="tab-btn active" data-tab="insights">🧠 ${t('aiInsights', 'التحليل الذكي العميق')}</button>
+        <button class="tab-btn" data-tab="assistant">💬 ${t('aiAssistant', 'المساعد الذكي')}</button>
         <button class="tab-btn" data-tab="forecast">📈 ${t('aiForecast', 'التنبؤ وإعادة التخزين')}</button>
         <button class="tab-btn" data-tab="anomalies">🛡️ ${t('aiAnomalies', 'كشف الشواذ')}</button>
         <button class="tab-btn" data-tab="ocr">📸 ${t('aiOcr', 'قراءة فاتورة مورد')}</button>
@@ -31,8 +35,6 @@ export async function renderAiPage(ctx) {
     </div>`;
 
   // status bar
-  loadStatusBar();
-
   // tabs wiring
   content.querySelectorAll('#aiTabs .tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -41,8 +43,6 @@ export async function renderAiPage(ctx) {
       renderTab(btn.dataset.tab);
     });
   });
-
-  renderTab('assistant');
 
   /* ---------- status ---------- */
   async function loadStatusBar() {
@@ -66,11 +66,185 @@ export async function renderAiPage(ctx) {
   /* ---------- tab renderer ---------- */
   function renderTab(name) {
     const body = content.querySelector('#aiTabBody');
-    if (name === 'assistant') renderAssistant(body);
+    if (name === 'insights') renderInsights(body);
+    else if (name === 'assistant') renderAssistant(body);
     else if (name === 'forecast') renderForecast(body);
     else if (name === 'anomalies') renderAnomalies(body);
     else if (name === 'ocr') renderOcr(body);
     else if (name === 'summary') renderSummary(body);
+  }
+
+  /* ============================================================
+   * 0) SMART INSIGHTS — built-in Smart Engine (free, no key needed)
+   * Deep inventory + sales + customers analysis with health score
+   * and prioritized, actionable recommendations.
+   * ============================================================ */
+  const INS_SEV = {
+    critical:    { cls: 'ins-critical',    badge: 'danger',  label: t('insCritical', 'حرِج') },
+    high:        { cls: 'ins-high',        badge: 'warning', label: t('insHigh', 'مرتفع') },
+    medium:      { cls: 'ins-medium',      badge: 'warning', label: t('insMedium', 'متوسط') },
+    low:         { cls: 'ins-low',         badge: 'info',    label: t('insLow', 'منخفض') },
+    info:        { cls: 'ins-info',        badge: 'info',    label: t('insInfo', 'معلومة') },
+    opportunity: { cls: 'ins-opportunity', badge: 'success', label: t('insOpportunity', 'فرصة') }
+  };
+
+  async function renderInsights(body, keepSpin) {
+    if (!keepSpin) body.innerHTML = `<div class="loading-state"><div class="spinner"></div><span>🧠 ${t('insAnalyzing', 'يجري تحليل مخزنك بعمق…')}</span></div>`;
+    let d;
+    try {
+      const res = await apiFetch.get('/api/ai/insights');
+      d = res.data || res;
+    } catch (err) {
+      body.innerHTML = `<div class="empty-state"><div class="empty-title">⛔ ${esc(err.message)}</div></div>`;
+      return;
+    }
+
+    const k = d.kpis || {};
+    const list = d.insights || [];
+    const score = Number(d.score) || 0;
+    const scoreColor = score >= 75 ? '#10b981' : score >= 50 ? '#f59e0b' : '#ef4444';
+    const circ = 2 * Math.PI * 52;
+    const off = circ * (1 - score / 100);
+
+    const nf = (v) => Number(v || 0).toLocaleString(lang === 'ar' ? 'ar-DZ' : (lang === 'fr' ? 'fr-DZ' : 'en-US'));
+
+    // per-insight item table columns
+    function itemsTable(id, items) {
+      if (!items || !items.length) return '';
+      const cfg = {
+        restock:   { cols: [t('product'), t('stock'), t('insCover', 'الغطاء (يوم)'), t('aiSuggestedQty', 'الكمية المقترحة'), t('urgency', 'الأولوية')],
+                     row: r => [esc(pname(r.name)), String(r.stock ?? '—'), String(r.coverDays ?? '—'), `<strong>${r.suggestedQty ?? '—'}</strong> ${esc(r.unit || '')}`,
+                                `<span class="badge badge-${({critical:'danger',high:'warning',medium:'info'})[r.urgency] || 'info'}">${esc(({critical:t('urgencyCritical','حرِج'),high:t('urgencyHigh','مرتفع'),medium:t('urgencyMedium','متوسط')})[r.urgency] || r.urgency || '—')}</span>`] },
+        deadStock: { cols: [t('product'), t('stock'), t('insValue', 'القيمة (دج)')],
+                     row: r => [esc(pname(r.name)), String(r.stock ?? '—'), nf(r.value)] },
+        overstock: { cols: [t('product'), t('stock'), t('insCover', 'الغطاء (يوم)'), t('insValue', 'القيمة (دج)')],
+                     row: r => [esc(pname(r.name)), String(r.stock ?? '—'), String(r.coverDays ?? '—'), nf(r.value)] },
+        margin:    { cols: [t('product'), t('insRevenue', 'الإيراد (دج)'), t('insCost', 'التكلفة (دج)'), t('insMargin', 'الهامش ٪'), t('qty')],
+                     row: r => [esc(pname(r.name)), nf(r.revenue), nf(r.cost), `<strong style="color:${(r.marginPct || 0) < 0 ? '#ef4444' : 'inherit'}">${r.marginPct ?? '—'}%</strong>`, String(r.qty ?? '—')] },
+        growing:   { cols: [t('product'), t('insChange', 'التغيّر'), t('qty30', 'الكمية (30 يوم)')],
+                     row: r => [esc(pname(r.name)), `<span class="badge badge-success">${esc(r.change || 'new')}</span>`, String(r.qty ?? '—')] },
+        declining: { cols: [t('product'), t('insChange', 'التغيّر'), t('qty30', 'الكمية (30 يوم)')],
+                     row: r => [esc(pname(r.name)), `<span class="badge badge-danger">${esc(r.change || '')}</span>`, String(r.qty ?? '—')] },
+        vip:       { cols: [t('customer'), t('phone'), t('insTotalSpent', 'إجمالي الشراء (دج)'), t('insPoints', 'نقاط الولاء')],
+                     row: r => [esc(pname(r.name)), esc(r.phone || '—'), nf(r.totalSpent), String(r.points ?? '—')] },
+        churn:     { cols: [t('customer'), t('phone'), t('insTotalSpent', 'إجمالي الشراء (دج)'), t('insDaysSince', 'أيام منذ آخر شراء')],
+                     row: r => [esc(pname(r.name)), esc(r.phone || '—'), nf(r.spent), String(r.daysSince ?? '—')] },
+        peak:      { cols: [t('insDay', 'اليوم'), t('insRevenue', 'الإيراد (دج)'), t('count', 'العدد')],
+                     row: r => [esc(pname(r.day)), nf(r.revenue), String(r.count ?? '—')] },
+        hours:     { cols: [t('insHour', 'الساعة'), t('count', 'العدد'), t('insRevenue', 'الإيراد (دج)')],
+                     row: r => [esc(r.hour || '—'), String(r.count ?? '—'), nf(r.revenue)] },
+        pricing:   { cols: [t('product'), t('insCurrentPrice', 'السعر الحالي'), t('insCost', 'التكلفة'), t('insSuggestedPrice', 'السعر المقترح'), t('qty30', 'الكمية (30 يوم)')],
+                     row: r => [esc(pname(r.name)), nf(r.current), nf(r.cost), `<strong>${nf(r.suggested)}</strong>`, String(r.qty30 ?? '—')] },
+        payments:  { cols: [t('insMethod', 'الطريقة'), t('insRevenue', 'الإيراد (دج)'), '٪', t('count', 'العدد')],
+                     row: r => [esc(pname(r.method)), nf(r.revenue), String(r.pct ?? '—'), String(r.count ?? '—')] }
+      };
+      const c = cfg[id] || { cols: [t('details')], row: r => [esc(truncate(JSON.stringify(r), 120))] };
+      return `<div class="table-wrap"><table class="table ins-items-table">
+        <thead><tr>${c.cols.map(x => `<th>${x}</th>`).join('')}</tr></thead>
+        <tbody>${items.map(r => `<tr>${c.row(r).map(x => `<td>${x}</td>`).join('')}</tr>`).join('')}</tbody>
+      </table></div>`;
+    }
+
+    body.innerHTML = `
+      <div class="insights-wrap">
+        <div class="insights-top">
+          <div class="card ins-score-card">
+            <div class="ins-gauge">
+              <svg viewBox="0 0 120 120" aria-hidden="true">
+                <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(148,163,184,.25)" stroke-width="12"/>
+                <circle cx="60" cy="60" r="52" fill="none" stroke="${scoreColor}" stroke-width="12" stroke-linecap="round"
+                        stroke-dasharray="${circ.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}" transform="rotate(-90 60 60)"/>
+              </svg>
+              <div class="ins-score-num" style="color:${scoreColor}">${score}<span>/100</span></div>
+            </div>
+            <div class="ins-score-meta">
+              <h3>🧠 ${t('insHealthScore', 'صحة المتجر العامة')}</h3>
+              <p class="ins-verdict">${esc(d.verdict || '')}</p>
+              <div class="ins-meta-row">
+                <span class="ai-chip ok">⚡ ${esc(d.engine || 'smart-engine')}</span>
+                <button class="btn btn-outline btn-sm" id="insRefresh">🔄 ${t('insRefresh', 'تحليل جديد')}</button>
+              </div>
+              ${d.note ? `<p class="muted ins-note">${esc(d.note)}</p>` : ''}
+            </div>
+          </div>
+        </div>
+
+        <div class="kpi-grid ins-kpis">
+          <div class="card kpi-card"><div class="kpi-label">💰 ${t('insRevenue30', 'إيراد 30 يوم')}</div><div class="kpi-value">${nf(k.revenue30)}</div><div class="kpi-sub">DZD</div></div>
+          <div class="card kpi-card"><div class="kpi-label">📈 ${t('insGrossProfit', 'الربح الإجمالي')}</div><div class="kpi-value">${nf(k.grossProfit)}</div><div class="kpi-sub">${t('insMargin', 'الهامش')}: ${k.marginPct ?? 0}%</div></div>
+          <div class="card kpi-card"><div class="kpi-label">🧾 ${t('insSalesCount', 'عدد الفواتير (30 يوم)')}</div><div class="kpi-value">${nf(k.salesCount)}</div><div class="kpi-sub">${t('insAvgBasket', 'متوسط السلة')}: ${nf(k.avgBasket)} DZD</div></div>
+          <div class="card kpi-card"><div class="kpi-label">📦 ${t('insStockValue', 'قيمة المخزون')}</div><div class="kpi-value">${nf(k.stockValue)}</div><div class="kpi-sub">DZD</div></div>
+          <div class="card kpi-card"><div class="kpi-label">🧊 ${t('insDeadStock', 'مخزون راكد')}</div><div class="kpi-value">${nf(k.deadStockValue)}</div><div class="kpi-sub">${k.deadStockCount || 0} ${t('insProducts', 'منتج')}</div></div>
+          <div class="card kpi-card"><div class="kpi-label">🚨 ${t('insCriticalRestock', 'إعادة طلب حرِجة')}</div><div class="kpi-value">${k.criticalRestock || 0}</div><div class="kpi-sub">${t('insNegMargin', 'منتجات بهامش سالب')}: ${k.negativeMarginCount || 0}</div></div>
+        </div>
+
+        <div class="ins-actions-row">
+          <h3>🎯 ${t('insRecommendations', 'التوصيات مرتبة حسب الأولوية')} (${list.length})</h3>
+          <div class="export-btns">
+            <button class="btn btn-secondary btn-sm" id="insXlsx">📊 Excel</button>
+            <button class="btn btn-secondary btn-sm" id="insPdf">📄 PDF</button>
+          </div>
+        </div>
+
+        <div class="insights-list">
+          ${list.length ? list.map((ins, idx) => {
+            const sev = INS_SEV[ins.severity] || INS_SEV.info;
+            return `
+            <div class="card ins-card ${sev.cls}" data-ins-idx="${idx}">
+              <div class="ins-card-head" role="button" tabindex="0" aria-expanded="false">
+                <div class="ins-card-title">
+                  <span class="badge badge-${sev.badge}">${sev.label}</span>
+                  <strong>${esc(ins.title || '')}</strong>
+                </div>
+                <svg class="ins-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              </div>
+              <div class="ins-card-body" hidden>
+                <p class="ins-detail">${fmt(ins.detail || '')}</p>
+                ${ins.impact ? `<div class="ins-impact">📊 ${t('insImpact', 'الأثر المتوقع')}: ${fmt(ins.impact)}</div>` : ''}
+                ${itemsTable(ins.id, ins.items)}
+                ${ins.action ? `<div class="ins-action">💡 <strong>${t('insAction', 'الإجراء المقترح')}:</strong> ${fmt(ins.action)}</div>` : ''}
+              </div>
+            </div>`;
+          }).join('') : `<div class="card"><div class="empty-state"><div class="empty-title">✅ ${t('insAllGood', 'لا توصيات حالياً — بياناتك سليمة')}</div></div></div>`}
+        </div>
+      </div>`;
+
+    // expand/collapse
+    body.querySelectorAll('.ins-card-head').forEach(h => {
+      const open = () => {
+        const card = h.closest('.ins-card');
+        const bd = card.querySelector('.ins-card-body');
+        bd.hidden = !bd.hidden;
+        h.setAttribute('aria-expanded', bd.hidden ? 'false' : 'true');
+        card.classList.toggle('open', !bd.hidden);
+      };
+      h.addEventListener('click', open);
+      h.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+    });
+    // open the first (top priority) card by default
+    const first = body.querySelector('.ins-card .ins-card-body');
+    if (first) { first.hidden = false; first.closest('.ins-card').classList.add('open'); }
+
+    body.querySelector('#insRefresh').addEventListener('click', () => renderInsights(body));
+
+    // export all recommendations flattened
+    const flat = [];
+    (d.insights || []).forEach(ins => (ins.items || []).forEach(it => {
+      flat.push(Object.assign({ category: ins.title || ins.id, severity: ins.severity, action: ins.action || '' }, it));
+    }));
+    const cols = [
+      { label: t('insCategory', 'التصنيف'), key: 'category' },
+      { label: t('insSeverity', 'الأولوية'), key: 'severity' },
+      { label: t('itemNameRequired', 'الصنف'), value: r => pname(r.name || r.day || r.hour || r.method || '') },
+      { label: t('details'), value: r => truncate(Object.keys(r).filter(x => !['category','severity','action'].includes(x)).map(x => `${x}: ${typeof r[x] === 'object' ? '' : r[x]}`).join(' | '), 160) },
+      { label: t('insAction', 'الإجراء'), value: r => truncate(r.action, 120) }
+    ];
+    const xlsxBtn = body.querySelector('#insXlsx');
+    const pdfBtn = body.querySelector('#insPdf');
+    if (xlsxBtn) xlsxBtn.addEventListener('click', () =>
+      window.DZExport.exportToExcel({ columns: cols, rows: flat, filename: 'dzpospro-smart-insights', title: t('aiInsights', 'التحليل الذكي العميق') }));
+    if (pdfBtn) pdfBtn.addEventListener('click', () =>
+      window.DZExport.exportToPDF({ columns: cols, rows: flat, filename: 'dzpospro-smart-insights', title: t('aiInsights', 'التحليل الذكي العميق'), landscape: true }));
   }
 
   /* ============================================================
@@ -408,4 +582,8 @@ export async function renderAiPage(ctx) {
   function fmt(s) {
     return esc(s).replace(/\n/g, '<br/>').replace(/•/g, '<span style="color:#10b981">•</span>');
   }
+
+  // initial render — after every renderer + constant is defined
+  loadStatusBar();
+  renderTab('insights');
 }
