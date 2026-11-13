@@ -93,16 +93,16 @@
 
     /**
      * Confirmation dialog (SweetAlert2-backed). Resolves true/false.
+     * v4.2 — labels via window.t() in ALL 9 languages (was ar/en/fr hardcode).
      */
     confirm(message, opts) {
       opts = opts || {};
-      const fallback = {
-        ar: { title: 'تأكيد', confirm: 'نعم', cancel: 'إلغاء' },
-        en: { title: 'Confirm', confirm: 'Yes', cancel: 'Cancel' },
-        fr: { title: 'Confirmer', confirm: 'Oui', cancel: 'Annuler' }
+      const f = {
+        title: tt('confirmTitle', 'تأكيد'),
+        confirm: tt('confirmYes', 'نعم'),
+        cancel: tt('confirmCancel', 'إلغاء')
       };
       const lang = (typeof global.currentLang !== 'undefined' && global.currentLang) || localStorage.getItem('lang') || 'ar';
-      const f = fallback[lang] || fallback.ar;
 
       if (typeof Swal === 'undefined') {
         return Promise.resolve(window.confirm(message || ''));
@@ -122,16 +122,16 @@
 
     /**
      * Prompt dialog. Resolves the entered string or null on cancel.
+     * v4.2 — labels via window.t() in ALL 9 languages.
      */
     prompt(opts) {
       opts = opts || {};
-      const fallback = {
-        ar: { title: 'إدخال', confirm: 'موافق', cancel: 'إلغاء' },
-        en: { title: 'Input', confirm: 'OK', cancel: 'Cancel' },
-        fr: { title: 'Saisie', confirm: 'OK', cancel: 'Annuler' }
+      const f = {
+        title: tt('inputTitle', 'إدخال'),
+        confirm: tt('ok', 'موافق'),
+        cancel: tt('confirmCancel', 'إلغاء')
       };
       const lang = (typeof global.currentLang !== 'undefined' && global.currentLang) || localStorage.getItem('lang') || 'ar';
-      const f = fallback[lang] || fallback.ar;
 
       if (typeof Swal === 'undefined') {
         return Promise.resolve(window.prompt(opts.message || '', opts.defaultValue || '') || null);

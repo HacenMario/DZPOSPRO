@@ -143,6 +143,11 @@
     get: () => currentLang
   });
   global.t = t;
+  // v4.2 — locale for date/chart labels: follows the app language while
+  // keeping Western digits (Algeria convention) even in Arabic mode.
+  global.dzposLocale = function () {
+    return currentLang === 'ar' ? 'ar-u-nu-latn' : currentLang;
+  };
   global.loadLanguage = loadLanguage;
   global.applyLanguage = applyLanguage;
   global.setLanguage = setLanguage;

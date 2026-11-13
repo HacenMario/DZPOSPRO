@@ -14,11 +14,11 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/theme-light.css?v=4.1.0" />
-    <link rel="stylesheet" href="css/theme-dark.css?v=4.1.0" />
-    <link rel="stylesheet" href="css/main.css?v=4.1.0" />
-    <link rel="stylesheet" href="css/features.css?v=4.1.0" />
-    <link rel="stylesheet" href="css/upgrade.css?v=4.1.0" />
+    <link rel="stylesheet" href="css/theme-light.css?v=4.2.0" />
+    <link rel="stylesheet" href="css/theme-dark.css?v=4.2.0" />
+    <link rel="stylesheet" href="css/main.css?v=4.2.0" />
+    <link rel="stylesheet" href="css/features.css?v=4.2.0" />
+    <link rel="stylesheet" href="css/upgrade.css?v=4.2.0" />
 </head>
 <body class="login-page">
     <main class="login-main">
@@ -110,10 +110,11 @@
         </section>
     </main>
 
-    <script src="vendor/sweetalert2.min.js?v=4.1.0"></script>
-    <script src="js/flags.js?v=4.1.0"></script>
-    <script src="js/i18n.js?v=4.1.0"></script>
-    <script src="js/toast.js?v=4.1.0"></script>
+    <script src="js/config.js?v=4.2.0"></script>
+    <script src="vendor/sweetalert2.min.js?v=4.2.0"></script>
+    <script src="js/flags.js?v=4.2.0"></script>
+    <script src="js/i18n.js?v=4.2.0"></script>
+    <script src="js/toast.js?v=4.2.0"></script>
     <script>
     (function() {
         'use strict';
@@ -175,19 +176,21 @@
                 btn.disabled = true;
 
 try {
-    // v3.1 — smart API base (same logic as js/config.js)
-    const API_BASE = (function () {
-        var o = '';
-        try { o = localStorage.getItem('dzpos_api_base') || window.DZPOS_API_BASE || ''; } catch (e) {}
-        if (o) return String(o).replace(/\/+$/, '');
-        if (location.protocol === 'file:') return 'https://dzpospro-production.up.railway.app';
-        if (/(^|\.)vercel\.app$/i.test(location.hostname || '')) return 'https://dzpospro-production.up.railway.app';
-        return '';
-    })();
+    // v4.2 — LIVE API base from js/config.js (probed & healed, never cached)
+    const API_BASE = (typeof window.dzposApiBase === 'function')
+        ? window.dzposApiBase()
+        : 'https://dzpospro-production-ec3f34a9.up.railway.app';
     // v3 — SaaS store registration: creates the Store (14-day trial) + its admin owner
     const res = await fetch(`${API_BASE}/api/auth/register-store`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: (function () {
+            var h = { 'Content-Type': 'application/json' };
+            var lang = 'ar';
+            try { lang = (window.currentLang || localStorage.getItem('lang') || 'ar').slice(0, 2); } catch (_) {}
+            h['Accept-Language'] = lang;
+            h['x-dzpos-lang'] = lang;
+            return h;
+        })(),
         body: JSON.stringify({ storeName, ownerName: name, name, email, password })
     });
     const data = await res.json();
@@ -201,12 +204,12 @@ try {
                 localStorage.setItem('user', JSON.stringify(payload.user || {}));
             } catch (_) {}
             if (typeof window.Toast !== 'undefined' && window.Toast.success) {
-                window.Toast.success('🎉 Store created! Welcome to DZ POS PRO');
+                window.Toast.success(window.t ? window.t('regStoreCreated', '🎉 تم إنشاء المتجر بنجاح! مرحباً بك في DZ POS PRO') : 'Store created! Welcome to DZ POS PRO');
             }
             setTimeout(() => { window.location.href = 'dashboard.html'; }, 1200);
         } else {
             if (typeof window.Toast !== 'undefined' && window.Toast.success) {
-                window.Toast.success('Store created successfully! Please login.');
+                window.Toast.success(window.t ? window.t('regStoreCreatedLogin', 'تم إنشاء المتجر بنجاح! يرجى تسجيل الدخول.') : 'Store created successfully! Please login.');
             }
             setTimeout(() => { window.location.href = 'index.html?registered=1'; }, 1500);
         }
@@ -227,6 +230,6 @@ try {
         }
     })();
     </script>
-<script src="js/pwa.js?v=4.1.0"></script>
+<script src="js/pwa.js?v=4.2.0"></script>
 </body>
 </html>

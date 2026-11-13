@@ -14,15 +14,12 @@
 (function (global) {
   'use strict';
 
-  // ===== v3.1: smart API base (mirrors config.js) =====
-  const API_BASE = (function () {
-    var o = '';
-    try { o = localStorage.getItem('dzpos_api_base') || window.DZPOS_API_BASE || ''; } catch (e) {}
-    if (o) return String(o).replace(/\/+$/, '');
-    if (location.protocol === 'file:') return 'https://dzpospro-production-ec3f34a9.up.railway.app';
-    if (/(^|\.)vercel\.app$/i.test(location.hostname || '')) return 'https://dzpospro-production-ec3f34a9.up.railway.app';
-    return '';
-  })();
+  // ===== v4.2: LIVE API base (js/config.js resolves + heals) =====
+  function API_BASE() {
+    return (typeof window.dzposApiBase === 'function'
+      ? window.dzposApiBase()
+      : (window.DZPOS_API_BASE || '')).replace(/\/+$/, '');
+  }
 
   let socket = null;
 
@@ -40,8 +37,8 @@
     const user = getCurrentUser();
     if (!token || !user) return null;
 
-    // ===== الاتصال بـ Railway بدلاً من Vercel =====
-    socket = io(API_BASE, {
+    // ===== الاتصال بالخادم (v4.2: base لحظية + تبديل تلقائي) =====
+    socket = io(API_BASE(), {
       auth: { token },
       transports: ['websocket', 'polling'],
       reconnection: true,
@@ -88,6 +85,16 @@
   }
 
   function getSocket() { return socket; }
+
+  // v4.2 — when the API base heals/changes, drop the old socket so the next
+  // initSocket() reconnects to the right server.
+  global.addEventListener('dzpos:apibase-changed', function () {
+    if (socket) {
+      try { socket.removeAllListeners(); socket.disconnect(); } catch (_) {}
+      socket = null;
+      try { initSocket(); } catch (_) {}
+    }
+  });
 
   global.initSocket = initSocket;
   global.socket = null;          // populated by initSocket via getter

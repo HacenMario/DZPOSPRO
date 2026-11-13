@@ -15,15 +15,10 @@
 (function () {
   'use strict';
 
-  // ===== v3.1: smart API base (mirrors config.js) =====
-  const API_BASE = (function () {
-    var o = '';
-    try { o = localStorage.getItem('dzpos_api_base') || window.DZPOS_API_BASE || ''; } catch (e) {}
-    if (o) return String(o).replace(/\/+$/, '');
-    if (location.protocol === 'file:') return 'https://dzpospro-production-ec3f34a9.up.railway.app';
-    if (/(^|\.)vercel\.app$/i.test(location.hostname || '')) return 'https://dzpospro-production-ec3f34a9.up.railway.app';
-    return '';
-  })();
+  // ===== v4.2: LIVE API base (js/config.js resolves + heals) =====
+  const API_BASE = () => (typeof window.dzposApiBase === 'function'
+    ? window.dzposApiBase()
+    : (window.DZPOS_API_BASE || '').replace(/\/+$/, ''));
 
   /* ---------- Auth guard ---------- */
   const token = localStorage.getItem('token');
@@ -225,8 +220,8 @@ async function loadPage(page) {
       if (typeof fn !== 'function') {
         throw new Error('Module "' + spec.path + '" does not export "' + spec.fn + '"');
       }
-      // ===== استدعاء الدالة مع API_BASE =====
-      await fn.call(mod, { apiBase: API_BASE });
+      // ===== استدعاء الدالة مع API_BASE المحسوبة لحظة الطلب =====
+      await fn.call(mod, { apiBase: API_BASE() });
     } catch (err) {
       console.error('[dashboard] loadPage failed:', page, err);
       if (content) {
@@ -458,7 +453,7 @@ async function loadPage(page) {
       try {
         const ctrl = ('AbortController' in window) ? new AbortController() : null;
         const tm = ctrl ? setTimeout(() => { try { ctrl.abort(); } catch (_) {} }, 5000) : null;
-        const res = await fetch(API_BASE + '/api/health?t=' + Date.now(), { cache: 'no-store', signal: ctrl ? ctrl.signal : undefined });
+        const res = await fetch(API_BASE() + '/api/health?t=' + Date.now(), { cache: 'no-store', signal: ctrl ? ctrl.signal : undefined });
         if (tm) clearTimeout(tm);
         const j = await res.json().catch(() => null);
         ok = res.ok && j && (j.success !== false);
@@ -486,6 +481,8 @@ async function loadPage(page) {
     // fast reactions from the apiFetch layer
     window.addEventListener('dzpos:api-offline', () => { if (connState !== 'checking') { connState = 'offline'; renderConn(); } });
     window.addEventListener('dzpos:api-online', () => { probeConnection(); });
+    // v4.2 — the API base healed/changed (Railway redeploy) → re-probe + reload data
+    window.addEventListener('dzpos:apibase-changed', () => { probeConnection(); });
 
     renderConn();
     probeConnection();

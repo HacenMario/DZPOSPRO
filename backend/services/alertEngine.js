@@ -29,7 +29,7 @@ const L = {
     summaryTitle: { ar: '🌙 ملخص اليوم الذكي', fr: '🌙 Résumé intelligent du jour', en: '🌙 Smart daily summary' }
 };
 
-function pick(lang) { return L[lang] ? lang : 'fr'; }
+function pick(lang) { return L[lang] ? lang : 'ar'; }
 
 /** Default configs for a store (created lazily). */
 async function ensureConfigs(storeId) {
@@ -59,7 +59,7 @@ async function checkLowStock(store) {
     if (!low.length) return;
     // avoid spamming: only if last trigger > 20h ago
     if (cfg.lastTriggeredAt && Date.now() - new Date(cfg.lastTriggeredAt).getTime() < 20 * 3600 * 1000) return;
-    const lang = pick(store.settingsLang || 'fr');
+    const lang = pick(store.settingsLang || 'ar');
     const msg = L.lowStock[lang](low.length);
     await notifyStore({ storeId: store._id, type: 'alert', ...msg, link: 'products', audienceRoles: cfg.notifyRoles });
     await AlertConfig.updateOne({ _id: cfg._id }, { lastTriggeredAt: new Date() });
@@ -76,7 +76,7 @@ async function checkZeroSales(store) {
     const count = await Sale.countDocuments({ storeId: store._id, saleDate: { $gte: start }, status: { $nin: ['cancelled'] } });
     if (count > 0) return;
     if (cfg.lastTriggeredAt && Date.now() - new Date(cfg.lastTriggeredAt).getTime() < 12 * 3600 * 1000) return;
-    const lang = pick(store.settingsLang || 'fr');
+    const lang = pick(store.settingsLang || 'ar');
     const msg = L.zeroSales[lang];
     await notifyStore({ storeId: store._id, type: 'warning', ...msg, link: 'sales', audienceRoles: cfg.notifyRoles });
     await AlertConfig.updateOne({ _id: cfg._id }, { lastTriggeredAt: new Date() });
@@ -96,7 +96,7 @@ async function checkDailyTarget(store) {
     if (pct >= 100) {
         if (cfg.lastTriggeredAt && Date.now() - new Date(cfg.lastTriggeredAt).getTime() < 12 * 3600 * 1000) return;
     }
-    const lang = pick(store.settingsLang || 'fr');
+    const lang = pick(store.settingsLang || 'ar');
     const msg = L.target[lang](Math.min(pct, 999));
     await notifyStore({ storeId: store._id, type: pct >= 100 ? 'success' : 'info', ...msg, link: 'dashboard', audienceRoles: cfg.notifyRoles });
     await AlertConfig.updateOne({ _id: cfg._id }, { lastTriggeredAt: new Date() });

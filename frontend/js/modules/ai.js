@@ -92,7 +92,7 @@ export async function renderAiPage(ctx) {
     if (!keepSpin) body.innerHTML = `<div class="loading-state"><div class="spinner"></div><span>🧠 ${t('insAnalyzing', 'يجري تحليل مخزنك بعمق…')}</span></div>`;
     let d;
     try {
-      const res = await apiFetch.get('/api/ai/insights');
+      const res = await apiFetch.get('/api/ai/insights?lang=' + encodeURIComponent(lang));
       d = res.data || res;
     } catch (err) {
       body.innerHTML = `<div class="empty-state"><div class="empty-title">⛔ ${esc(err.message)}</div></div>`;
@@ -312,7 +312,7 @@ export async function renderAiPage(ctx) {
     body.innerHTML = `<div class="loading-state"><div class="spinner"></div><span>${t('loading')}</span></div>`;
     let data = null;
     try {
-      const res = await apiFetch.get('/api/ai/forecast?coverageDays=30&summary=1');
+      const res = await apiFetch.get('/api/ai/forecast?coverageDays=30&summary=1&lang=' + encodeURIComponent(lang));
       data = res.data || res;
     } catch (err) {
       body.innerHTML = `<div class="empty-state"><div class="empty-title">⛔ ${esc(err.message)}</div></div>`;
@@ -379,7 +379,7 @@ export async function renderAiPage(ctx) {
     body.innerHTML = `<div class="loading-state"><div class="spinner"></div><span>${t('loading')}</span></div>`;
     let data = null;
     try {
-      const res = await apiFetch.get('/api/ai/anomalies?interpret=1');
+      const res = await apiFetch.get('/api/ai/anomalies?interpret=1&lang=' + encodeURIComponent(lang));
       data = res.data || res;
     } catch (err) {
       body.innerHTML = `<div class="empty-state"><div class="empty-title">⛔ ${esc(err.message)}</div></div>`;
@@ -453,7 +453,7 @@ export async function renderAiPage(ctx) {
         const fd = new FormData();
         fd.append('image', file);
         fd.append('lang', lang);
-        const res = await apiFetch.post('/api/ai/ocr-invoice', fd);
+        const res = await apiFetch.post('/api/ai/ocr-invoice', fd, { headers: { 'x-dzpos-lang': lang, 'Accept-Language': lang } });
         currentData = (res.data && res.data.invoice) || res.invoice;
         renderResult(currentData);
         loadStatusBar();

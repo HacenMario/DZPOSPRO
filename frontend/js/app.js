@@ -15,15 +15,10 @@
 (function () {
   'use strict';
 
-  // ===== v3.1: smart API base (mirrors config.js) =====
-  const API_BASE = (function () {
-    var o = '';
-    try { o = localStorage.getItem('dzpos_api_base') || window.DZPOS_API_BASE || ''; } catch (e) {}
-    if (o) return String(o).replace(/\/+$/, '');
-    if (location.protocol === 'file:') return 'https://dzpospro-production-ec3f34a9.up.railway.app';
-    if (/(^|\.)vercel\.app$/i.test(location.hostname || '')) return 'https://dzpospro-production-ec3f34a9.up.railway.app';
-    return '';
-  })();
+  // ===== v4.2: LIVE API base (js/config.js resolves + heals) =====
+  const API_BASE = () => (typeof window.dzposApiBase === 'function'
+    ? window.dzposApiBase()
+    : (window.DZPOS_API_BASE || '').replace(/\/+$/, ''));
   
   /* ---------- Theme ---------- */
   function setTheme(theme) {
@@ -110,9 +105,17 @@
 
     setLoading(true);
     try {
-const res = await fetch(`${API_BASE}/api/auth/login`, {
+      const res = await fetch(`${API_BASE()}/api/auth/login`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: (function () {
+      // v4.2 — send the app language so backend validation messages follow it
+      var h = { 'Content-Type': 'application/json' };
+      var lang = 'ar';
+      try { lang = (window.currentLang || localStorage.getItem('lang') || 'ar').slice(0, 2); } catch (_) {}
+      h['Accept-Language'] = lang;
+      h['x-dzpos-lang'] = lang;
+      return h;
+    })(),
     body: JSON.stringify({ email, password })
       });
       let data = null;
@@ -182,7 +185,7 @@ const res = await fetch(`${API_BASE}/api/auth/login`, {
     try {
       const ctrl = ('AbortController' in window) ? new AbortController() : null;
       const tm = ctrl ? setTimeout(() => { try { ctrl.abort(); } catch (_) {} }, 5000) : null;
-      const res = await fetch(API_BASE + '/api/health?t=' + Date.now(), { cache: 'no-store', signal: ctrl ? ctrl.signal : undefined });
+      const res = await fetch(API_BASE() + '/api/health?t=' + Date.now(), { cache: 'no-store', signal: ctrl ? ctrl.signal : undefined });
       if (tm) clearTimeout(tm);
       const j = await res.json().catch(() => null);
       ok = res.ok && j && (j.success !== false);
@@ -251,7 +254,7 @@ const res = await fetch(`${API_BASE}/api/auth/login`, {
       dotEl.addEventListener('click', () => probeServer());
     }
     const verEl = document.querySelector('[data-i18n="version"]');
-    if (verEl) verEl.textContent = 'v4.1.0';
+    if (verEl) verEl.textContent = 'v4.2.0';
   });
 
   // Expose setTheme globally for any external caller

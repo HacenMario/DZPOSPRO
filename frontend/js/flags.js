@@ -28,26 +28,16 @@
   /* ---------- flag builders (viewBox 0 0 640 480) ---------- */
   const F = {};
 
-  // 🇩🇿 Algeria — official style: green hoist half, white fly half,
-  // red crescent & five-point star centred on the divide (crescent
-  // outer diameter = 3/4 of the height, star point towards hoist).
-  (function () {
-    const c1 = { x: 320, y: 240, r: 180 };   // outer circle
-    const c2 = { x: 420, y: 240, r: 144 };   // inner (hole) circle
-    const crescent = 'M' + (c1.x - c1.r) + ' ' + c1.y +
-      'a' + c1.r + ' ' + c1.r + ' 0 1 0 ' + (2 * c1.r) + ' 0' +
-      'a' + c1.r + ' ' + c1.r + ' 0 1 0 ' + (-2 * c1.r) + ' 0' +
-      ' M' + (c2.x - c2.r) + ' ' + c2.y +
-      'a' + c2.r + ' ' + c2.r + ' 0 1 0 ' + (2 * c2.r) + ' 0' +
-      'a' + c2.r + ' ' + c2.r + ' 0 1 0 ' + (-2 * c2.r) + ' 0';
-    // star: one point aimed at the crescent centre (i.e. to the hoist, 180°)
-    const star = starPts(450, 240, 60, 24, 180);
-    F.dz = '<svg viewBox="0 0 640 480" preserveAspectRatio="xMidYMid meet" aria-hidden="true">' +
-      '<rect width="640" height="480" fill="#ffffff"/>' +
-      '<rect width="320" height="480" fill="#006233"/>' +
-      '<path fill="#d21034" fill-rule="evenodd" d="' + crescent + '"/>' +
-      '<polygon fill="#d21034" points="' + star + '"/></svg>';
-  })();
+  // 🇩🇿 Algeria — OFFICIAL flag (v4.2): exact geometry of the national
+  // flag (green #006633 hoist half, white fly half, red #d21034
+  // crescent + 5-point star straddling the divide, horns opening
+  // towards the fly side). Source: official construction / Wikipedia
+  // Flag_of_Algeria.svg — verified against the official flag image.
+  F.dz = '<svg viewBox="0 0 900 600" preserveAspectRatio="xMidYMid meet" aria-hidden="true">' +
+    '<path fill="#ffffff" d="M0 0h900v600H0z"/>' +
+    '<path fill="#006633" d="M0 0h450v600H0z"/>' +
+    '<path fill="#d21034" d="M579.903811 225a150 150 0 1 0 0 150 120 120 0 1 1 0-150M585.676275 300 450 255.916106 533.852549 371.329239v-142.658277L450 344.083894z"/>' +
+    '</svg>';
 
   // 🇬🇧 United Kingdom — Union Flag (compact official construction)
   F.gb = '<svg viewBox="0 0 60 30" preserveAspectRatio="xMidYMid meet" aria-hidden="true">' +

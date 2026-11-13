@@ -14,15 +14,26 @@
 (function (global) {
   'use strict';
 
-  // ===== v3.1: smart API base (mirrors config.js) =====
-  const API_BASE = (function () {
-    var o = '';
-    try { o = localStorage.getItem('dzpos_api_base') || window.DZPOS_API_BASE || ''; } catch (e) {}
-    if (o) return String(o).replace(/\/+$/, '');
-    if (location.protocol === 'file:') return 'https://dzpospro-production-ec3f34a9.up.railway.app';
-    if (/(^|\.)vercel\.app$/i.test(location.hostname || '')) return 'https://dzpospro-production-ec3f34a9.up.railway.app';
-    return '';
-  })();
+  // ===== v4.2: LIVE API base (resolved by js/config.js, probed & healed) =====
+  // MUST be read at call time — never cached — so a Railway URL change
+  // is picked up instantly (fixes mobile "Offline + no data").
+  function API_BASE() {
+    if (typeof global.dzposApiBase === 'function') return global.dzposApiBase();
+    return (global.DZPOS_API_BASE || '').replace(/\/+$/, '');
+  }
+
+  // ===== v4.2: app language on EVERY request =====
+  // The backend used to read the BROWSER's Accept-Language (often "fr" in
+  // Algeria) which made AI/notifications/validation answers ignore the
+  // language chosen in the app. We now always send the app language.
+  function langHeaders(extra) {
+    var h = Object.assign({}, extra || {});
+    var lang = '';
+    try { lang = (global.currentLang || global.localStorage.getItem('lang') || 'ar').slice(0, 2); } catch (e) { lang = 'ar'; }
+    if (!h['Accept-Language']) h['Accept-Language'] = lang + ',ar;q=0.8,en;q=0.6';
+    if (!h['x-dzpos-lang']) h['x-dzpos-lang'] = lang;
+    return h;
+  }
 
   function getToken() {
     try { return localStorage.getItem('token'); } catch { return null; }
@@ -104,7 +115,7 @@
     options = options || {};
     const token = getToken();
 
-    const headers = Object.assign({}, options.headers || {});
+    const headers = langHeaders(options.headers);
     if (token) headers['Authorization'] = 'Bearer ' + token;
 
     // Auto-serialize plain object bodies
@@ -118,8 +129,8 @@
       headers['Content-Type'] = headers['Content-Type'] || 'application/json';
     }
 
-    // ===== بناء URL كامل =====
-    const fullUrl = url.startsWith('http') ? url : `${API_BASE}${url}`;
+    // ===== بناء URL كامل (v4.2: base محسوبة لحظة الطلب) =====
+    function buildUrl() { return url.startsWith('http') ? url : `${API_BASE()}${url}`; }
 
     const isGet = !options.method || options.method.toUpperCase() === 'GET';
     const attempts = isGet ? 2 : 1;
@@ -127,12 +138,23 @@
     let res;
     for (let attempt = 1; attempt <= attempts; attempt++) {
       try {
-        res = await rawFetch(fullUrl, Object.assign({}, options, { headers, body }));
+        res = await rawFetch(buildUrl(), Object.assign({}, options, { headers, body }));
         break;
       } catch (networkErr) {
         const callerAborted = options.signal && networkErr && networkErr.name === 'AbortError';
         if (attempt < attempts && !callerAborted) {
-          await delay(GET_RETRY_DELAY_MS);
+          // v4.2 — the configured server may have MOVED (Railway redeploy).
+          // Re-probe candidates once; if the base changed, retry immediately
+          // against the new one, otherwise wait and retry normally.
+          let baseChanged = false;
+          try {
+            if (typeof window.dzposReresolveApi === 'function' && !url.startsWith('http')) {
+              const oldBase = API_BASE();
+              await window.dzposReresolveApi();
+              baseChanged = API_BASE() !== oldBase;
+            }
+          } catch (_) { /* keep old base */ }
+          if (!baseChanged) await delay(GET_RETRY_DELAY_MS);
           continue;
         }
         console.error('[apiFetch] network error:', networkErr);
@@ -212,7 +234,7 @@
   function resolveAssetUrl(path) {
     if (!path || typeof path !== 'string') return '';
     if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:')) return path;
-    if (path.startsWith('/uploads/')) return API_BASE + path;
+    if (path.startsWith('/uploads/')) return API_BASE() + path;
     return path;
   }
 

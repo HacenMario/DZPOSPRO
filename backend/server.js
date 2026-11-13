@@ -301,7 +301,7 @@ global.sendStoreNotification = (storeId, notification) => {
             alertEngine.startAlertEngine({
                 onDailySummary: async (store) => {
                     try {
-                        const lang = store.settingsLang || 'fr';
+                        const lang = store.settingsLang || 'ar';
                         const result = await runWithTenant({ storeId: store._id, isSuper: false }, () =>
                             aiService.buildDailySummary({ storeId: store._id, lang })
                         );

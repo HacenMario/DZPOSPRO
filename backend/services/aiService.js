@@ -136,9 +136,19 @@ async function askQuestion({ storeId, userId, question, lang = 'ar', storeDoc = 
         if (err.code === 'AI_NOT_CONFIGURED' || err.code === 'AI_QUOTA' || err.code === 'AI_UNAVAILABLE' || err.code === 'AI_PARSE') {
             const smart = require('./smartEngine');
             const local = await smart.answerLocally(question, lang);
-            const notice = lang === 'fr' ? '\n\n(Réponse calculée localement — ajoutez une clé Gemini dans les paramètres pour des réponses en langage naturel.)'
-                : lang === 'en' ? '\n\n(Answer computed locally — add a Gemini key in Settings for full natural-language answers.)'
-                : '\n\n(تم الحساب محلياً — أضف مفتاح Gemini من الإعدادات للحصول على إجابات بلغة طبيعية كاملة.)';
+            // v4.2 — notice in ALL 9 supported languages (was fr/en/ar only)
+            const NOTICES = {
+                ar: 'تم الحساب محلياً — أضف مفتاح Gemini من الإعدادات للحصول على إجابات بلغة طبيعية كاملة.',
+                fr: 'Réponse calculée localement — ajoutez une clé Gemini dans les paramètres pour des réponses en langage naturel.',
+                en: 'Answer computed locally — add a Gemini key in Settings for full natural-language answers.',
+                tr: 'Yerel olarak hesaplandı — doğal dilde yanıtlar için Ayarlar\'dan bir Gemini anahtarı ekleyin.',
+                es: 'Respuesta calculada localmente: añade una clave Gemini en Ajustes para respuestas en lenguaje natural.',
+                it: 'Risposta calcolata localmente: aggiungi una chiave Gemini nelle impostazioni per risposte in linguaggio naturale.',
+                de: 'Lokal berechnet — füge in den Einstellungen einen Gemini-Schlüssel für Antworten in natürlicher Sprache hinzu.',
+                ru: 'Ответ рассчитан локально — добавьте ключ Gemini в настройках для ответов на естественном языке.',
+                zh: '本地计算结果 — 请在设置中添加 Gemini 密钥以获得自然语言回答。'
+            };
+            const notice = '\n\n(' + (NOTICES[lang] || NOTICES.ar) + ')';
             return { answer: local.answer + notice, source: 'engine', dataPack: pack, quota: await gemini.checkQuota(storeId, storeDoc) };
         }
         throw err;
@@ -200,7 +210,7 @@ async function computeForecast({ storeId, coverageDays = 30, summary = false, la
     let narrative = null;
     if (summary && rows.length) {
         try {
-            const system = `You are a tire-shop inventory advisor. Reply ONLY in ${LANG_NAME[lang] || 'French'}. Max 5 bullet points, each starting with "•". Be concrete: product, days left, suggested order quantity.`;
+            const system = `You are a tire-shop inventory advisor. Reply ONLY in ${LANG_NAME[lang] || LANG_NAME.ar}. Max 5 bullet points, each starting with "•". Be concrete: product, days left, suggested order quantity.`;
             const prompt = 'Forecast rows (JSON):\n' + JSON.stringify(rows.slice(0, 25)) + '\nWrite the restock briefing.';
             const r = await gemini.generate({ prompt, system, storeId, userId, feature: 'forecast', temperature: 0.3 });
             narrative = r.text;
@@ -285,7 +295,7 @@ async function detectAnomalies({ storeId, userId = null, lang = 'ar', interpret 
     let interpretation = null;
     if (interpret && findings.length) {
         try {
-            const system = `You are a loss-prevention analyst for a tire shop POS. Reply ONLY in ${LANG_NAME[lang] || 'French'}. Max 5 bullets starting with "•". For each finding: what it means, its risk level, and one concrete verification step. Never accuse anyone.`;
+            const system = `You are a loss-prevention analyst for a tire shop POS. Reply ONLY in ${LANG_NAME[lang] || LANG_NAME.ar}. Max 5 bullets starting with "•". For each finding: what it means, its risk level, and one concrete verification step. Never accuse anyone.`;
             const prompt = 'Findings (JSON):\n' + JSON.stringify(findings).slice(0, 4000) + '\nWrite the security briefing.';
             const r = await gemini.generate({ prompt, system, storeId, userId, feature: 'anomaly', temperature: 0.3 });
             interpretation = r.text;
@@ -328,7 +338,7 @@ async function buildDailySummary({ storeId, lang = 'ar', userId = null, storeDoc
     try {
         const system = [
             'You are the assistant of a tire-shop owner in Algeria, writing the end-of-day brief.',
-            `Reply ONLY in ${LANG_NAME[lang] || 'French'}.`,
+            `Reply ONLY in ${LANG_NAME[lang] || LANG_NAME.ar}.`,
             'Structure: 3 short sections with emojis: 📊 Today (2-3 sentences), 🏆 Top products (bullets), 💡 Recommendation for tomorrow (1-2 sentences).',
             'Use DZD currency. Only use provided data.'
         ].join(' ');
@@ -337,11 +347,18 @@ async function buildDailySummary({ storeId, lang = 'ar', userId = null, storeDoc
         text = r.text;
     } catch (err) {
         // graceful fallback: deterministic brief (no AI key needed)
+        // v4.2 — all 9 languages (was ar/fr/en only)
         const L = {
             ar: { t: '📊 ملخص اليوم', r: 'المبيعات', c: 'عدد الفواتير', top: '🏆 الأكثر مبيعاً', rec: '💡 تذكير: راجع المخزون المنخفض وأوامر الشراء المعلقة.' },
             fr: { t: '📊 Résumé du jour', r: 'Chiffre d\'affaires', c: 'Nb de ventes', top: '🏆 Top produits', rec: '💡 Pensez à vérifier le stock faible et les commandes en attente.' },
-            en: { t: '📊 Daily summary', r: 'Revenue', c: 'Sales count', top: '🏆 Top products', rec: '💡 Remember to check low stock and pending purchase orders.' }
-        }[lang] || {};
+            en: { t: '📊 Daily summary', r: 'Revenue', c: 'Sales count', top: '🏆 Top products', rec: '💡 Remember to check low stock and pending purchase orders.' },
+            tr: { t: '📊 Günün özeti', r: 'Ciro', c: 'Satış sayısı', top: '🏆 En çok satanlar', rec: '💡 Düşük stok ve bekleyen siparişleri kontrol etmeyi unutmayın.' },
+            es: { t: '📊 Resumen del día', r: 'Ingresos', c: 'Nº de ventas', top: '🏆 Productos top', rec: '💡 Recuerde revisar el stock bajo y los pedidos pendientes.' },
+            it: { t: '📊 Riepilogo del giorno', r: 'Ricavi', c: 'N. vendite', top: '🏆 Prodotti top', rec: '💡 Ricordare di controllare le scorte basse e gli ordini in sospeso.' },
+            de: { t: '📊 Tageszusammenfassung', r: 'Umsatz', c: 'Anzahl Verkäufe', top: '🏆 Top-Produkte', rec: '💡 Denken Sie an niedrige Bestände und offene Bestellungen.' },
+            ru: { t: '📊 Итоги дня', r: 'Выручка', c: 'Кол-во продаж', top: '🏆 Лучшие товары', rec: '💡 Не забудьте проверить низкие запасы и ожидающие заказы.' },
+            zh: { t: '📊 今日摘要', r: '营业额', c: '销售笔数', top: '🏆 热销商品', rec: '💡 提醒：请检查低库存和待处理采购单。' }
+        }[lang] || { t: '📊 ملخص اليوم', r: 'المبيعات', c: 'عدد الفواتير', top: '🏆 الأكثر مبيعاً', rec: '💡 تذكير: راجع المخزون المنخفض وأوامر الشراء المعلقة.' };
         text = `${L.t}\n${L.r}: ${stats.revenue.toLocaleString()} DZD | ${L.c}: ${stats.salesCount}\n${L.top}: ` +
             (stats.topItems.map(i => `${i.name} (${i.qty})`).join(', ') || '—') + `\n${L.rec}`;
     }

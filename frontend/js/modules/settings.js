@@ -73,6 +73,8 @@ function renderTabs() {
     { id: 'company',     label: t('companyInfo', 'Company / Fiscal'),   icon: '<path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/>' },
     { id: 'profile',     label: t('myProfile', 'My profile'),           icon: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>' },
     { id: 'appearance',  label: t('appearance', 'Appearance'),          icon: '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>' },
+    // v4.2 — Connection Doctor (every role: fixes mobile "Offline" issues)
+    { id: 'connection',  label: '📡 ' + t('connDoctorTab', 'الاتصال بالخادم'),       icon: '<path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>' },
     // v3 — AI + smart alerts (admin/manager only)
     ...(state.isAdmin ? [
       { id: 'ai',          label: '🤖 ' + t('aiTab', 'الذكاء الاصطناعي'),          icon: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/>' },
@@ -588,6 +590,91 @@ function bindAppearanceTab() {
   }
 }
 
+/* ---------- v4.2 — Tab: Connection Doctor ----------
+ * Live diagnosis of the backend connection: probe every known server,
+ * show latency, apply/reset the manual override. Built to solve the
+ * "my phone shows Offline" class of problems without any dev help.
+ */
+function renderConnectionTab() {
+  const cur = (typeof window.dzposApiBase === 'function') ? window.dzposApiBase()
+    : (window.DZPOS_API_BASE || '— (same origin)');
+  const override = (() => { try { return localStorage.getItem('dzpos_api_base') || ''; } catch (_) { return ''; } })();
+  return `
+    <div class="card">
+      <div class="card-header"><div class="card-title">📡 ${t('connDoctorTitle', 'فحص اتصال الخادم')}</div></div>
+      <div class="card-body">
+        <div class="help-text" style="margin-bottom:0.8rem;">${t('connDoctorIntro', 'إذا كانت الصفحات فارغة أو تظهر عبارة "غير متصل" على الهاتف، اضغط "فحص الخوادم" ليقوم النظام باختبار كل الخوادم واختيار الأسرع تلقائياً.')}</div>
+        <div class="form-grid" style="margin-bottom:0.9rem;">
+          <div class="form-group">
+            <label class="form-label">${t('connCurrentServer', 'الخادم الحالي')}</label>
+            <div class="input conn-current-url" style="font-family:var(--font-mono, monospace); font-size:0.78rem; word-break:break-all;">${cur || '— (same origin)'}</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">${t('connOverrideLabel', 'خادم مخصص (اختياري)')}</label>
+            <input class="input" id="connOverrideInput" type="url" placeholder="https://your-backend.up.railway.app" value="${override}" />
+            <div class="help-text">${t('connOverrideHelp', 'اتركه فارغاً للاختيار التلقائي. يُستخدم عند تغيير رابط Railway يدوياً.')}</div>
+          </div>
+        </div>
+        <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+          <button class="btn btn-primary btn-sm" id="connTestBtn">🔍 ${t('connTestAll', 'فحص الخوادم واختيار الأفضل')}</button>
+          <button class="btn btn-secondary btn-sm" id="connSaveOverride">💾 ${t('connSaveOverride', 'حفظ الخادم المخصص')}</button>
+          <button class="btn btn-secondary btn-sm" id="connResetBtn">↺ ${t('connResetAuto', 'إعادة التعيين التلقائي')}</button>
+        </div>
+        <div id="connTestResults" style="margin-top:1rem;"></div>
+      </div>
+    </div>`;
+}
+
+function bindConnectionTab() {
+  const results = document.getElementById('connTestResults');
+  const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  async function testAll() {
+    if (!results) return;
+    const t0 = (k, fb) => (typeof window.t === 'function' ? window.t(k, fb) : fb);
+    const list = [];
+    try { const ov = localStorage.getItem('dzpos_api_base'); if (ov) list.push(ov); } catch (_) {}
+    if (typeof window.dzposApiCandidates === 'function') window.dzposApiCandidates().forEach(c => list.push(c));
+    if (!list.length) list.push('');
+    results.innerHTML = `<div class="loading-state" style="padding:0.8rem;"><div class="spinner"></div><span>${t0('connTesting', 'جاري فحص الخوادم…')}</span></div>`;
+    const rows = await Promise.all(list.map(async (base) => {
+      const start = performance.now();
+      const ok = (typeof window.dzposApiProbe === 'function') ? await window.dzposApiProbe(base, 5000) : false;
+      const ms = Math.round(performance.now() - start);
+      return { base: base || '(same origin)', ok, ms };
+    }));
+    results.innerHTML = `<div class="conn-result-list">` + rows.map(r => `
+      <div class="conn-result-row ${r.ok ? 'ok' : 'bad'}">
+        <span class="conn-result-dot"></span>
+        <span class="conn-result-url">${esc(r.base)}</span>
+        <span class="conn-result-ms">${r.ok ? r.ms + ' ms' : '✕ ' + t0('connUnreachable', 'غير قابل للوصول')}</span>
+      </div>`).join('') + `</div>
+      <div class="help-text" style="margin-top:0.6rem;">${rows.some(r => r.ok) ? '✅ ' + t0('connTestDone', 'تم اختيار أفضل خادم تلقائياً. أعد تحميل الصفحة لتطبيق التغيير.') : '⚠️ ' + t0('connTestNone', 'لا يوجد خادم متاح — تحقق من اتصال الإنترنت.')}</div>`;
+    if (rows.some(r => r.ok) && typeof window.dzposResolveApiBase === 'function') {
+      await window.dzposResolveApiBase({ verify: true });
+    }
+  }
+
+  const testBtn = document.getElementById('connTestBtn');
+  if (testBtn) testBtn.addEventListener('click', testAll);
+  const saveBtn = document.getElementById('connSaveOverride');
+  if (saveBtn) saveBtn.addEventListener('click', async () => {
+    const inp = document.getElementById('connOverrideInput');
+    const v = (inp && inp.value || '').trim().replace(/\/+$/, '');
+    if (typeof window.dzposApiSetOverride === 'function') window.dzposApiSetOverride(v);
+    if (window.Toast) window.Toast.success(t('connOverrideSaved', 'تم حفظ الخادم. أعد تحميل الصفحة.'));
+  });
+  const resetBtn = document.getElementById('connResetBtn');
+  if (resetBtn) resetBtn.addEventListener('click', async () => {
+    if (typeof window.dzposApiClearOverride === 'function') window.dzposApiClearOverride();
+    const inp = document.getElementById('connOverrideInput');
+    if (inp) inp.value = '';
+    if (typeof window.dzposResolveApiBase === 'function') await window.dzposResolveApiBase({ verify: true });
+    if (window.Toast) window.Toast.success(t('connResetDone', 'تمت إعادة التعيين التلقائي للخادم.'));
+    testAll();
+  });
+}
+
 /* ---------- Render ---------- */
 function renderTabContent() {
   switch (state.activeTab) {
@@ -595,6 +682,7 @@ function renderTabContent() {
     case 'company':    return renderCompanyTab();
     case 'profile':    return renderProfileTab();
     case 'appearance': return renderAppearanceTab();
+    case 'connection': return renderConnectionTab();
     case 'ai':         return renderAiTab();
     case 'alerts':     return renderAlertsTab();
     default:           return renderStoreTab();
@@ -607,6 +695,7 @@ function bindTabContent() {
     case 'company':    bindCompanyTab(); break;
     case 'profile':    bindProfileTab(); break;
     case 'appearance': bindAppearanceTab(); break;
+    case 'connection': bindConnectionTab(); break;
     case 'ai':         bindAiTab(); break;
     case 'alerts':     bindAlertsTab(); break;
   }

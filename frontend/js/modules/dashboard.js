@@ -34,7 +34,7 @@ function fmtNum(n) {
   return Number(n || 0).toLocaleString();
 }
 function fmtDateShort(d) {
-  try { const dt = new Date(d); if (isNaN(dt.getTime())) return ''; return dt.toLocaleDateString(undefined, { year:'numeric', month:'2-digit', day:'2-digit' }); } catch { return ''; }
+  try { const dt = new Date(d); if (isNaN(dt.getTime())) return ''; const loc = (typeof window !== 'undefined' && typeof window.dzposLocale === 'function') ? window.dzposLocale() : undefined; return dt.toLocaleDateString(loc, { year:'numeric', month:'2-digit', day:'2-digit' }); } catch { return ''; }
 }
 
 function escapeHtml(s) {
@@ -422,25 +422,26 @@ function wireDashToolbar() {
   });
 }
 
-/* ---------- v4.1 — What's new (first visit of this version) ---------- */
+/* ---------- v4.2 — What's new (first visit of this version) ---------- */
 function maybeShowWhatsNew() {
   try {
-    if (localStorage.getItem('dzpos_whatsnew_v41') === '1') return;
+    if (localStorage.getItem('dzpos_whatsnew_v42') === '1') return;
     if (typeof Swal === 'undefined') return;
-    localStorage.setItem('dzpos_whatsnew_v41', '1');
+    localStorage.setItem('dzpos_whatsnew_v42', '1');
     const items = [
-      t('whatsNew1', 'إصلاح كامل للجوال: اتصال حقيقي بالخادم، تحديث فوري للنسخة، وصفر بيانات قديمة'),
-      t('whatsNew2', 'الإحصائيات والرسومات تتحدث الآن بتوقيتك المحلي مباشرة + زر تحديث وتحديث تلقائي'),
-      t('whatsNew3', 'تصميم عالمي جديد متجاوب 100% على الهاتف والحاسوب'),
-      t('whatsNew4', 'لوحة أوامر سريعة Ctrl+K للتنقل الفوري بين كل الصفحات'),
-      t('whatsNew5', 'المكتبات أصبحت مدمجة داخل التطبيق — يعمل حتى مع شبكات ضعيفة')
+      t('whatsNew42_1', '🪟 نوافذ التأكيد أصبحت نوافذ حقيقية منبثقة بهوية النظام (كانت تظهر كنص أسفل الصفحة)'),
+      t('whatsNew42_2', '🇩🇿 تصحيح علم الجزائر بالتصميم الرسمي المعتمد بالكامل'),
+      t('whatsNew42_3', '📱 إصلاح جذري لمشكلة "غير متصل" على الهاتف: يكتشف النظام الخوادم تلقائياً ويعالج الاتصال وحده'),
+      t('whatsNew42_4', '🌐 ترجمة شاملة 100%: المساعد الذكي، الإشعارات، والرسائل تتبع لغة التطبيق في كل الصفحات'),
+      t('whatsNew42_5', '🔍 فحص اتصال جديد في الإعدادات: اختبار كل الخوادم واختيار الأسرع + تحديد خادم مخصص'),
+      t('whatsNew42_6', '📋 صفحة سجل التدقيق محدثة بالكامل: بحث، فلاتر سريعة، إحصائيات، أجهزة، وتفاصيل كل حدث')
     ];
     Swal.fire({
-      title: t('whatsNewTitle', 'جديد في الإصدار 4.1'),
+      title: t('whatsNewTitle', 'جديد في الإصدار 4.2'),
       html: '<div class="whats-new-list">' + items.map(i => '<div class="whats-new-item">✅ <span>' + i + '</span></div>').join('') + '</div>',
       confirmButtonText: t('whatsNewOk', 'رائع، لنبدأ!'),
       confirmButtonColor: '#10b981',
-      width: 480
+      width: 520
     });
   } catch (_) {}
 }
@@ -510,7 +511,7 @@ export async function renderDashboardPage() {
   for (let i = 6; i >= 0; i--) {
     const d = new Date(today); d.setDate(today.getDate() - i);
     const key = isoDay(d); // v4.1 — local calendar day (matches backend tz grouping)
-    labels.push(d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' }));
+    labels.push(d.toLocaleDateString((typeof window !== 'undefined' && typeof window.dzposLocale === 'function') ? window.dzposLocale() : undefined, { weekday: 'short', day: 'numeric' }));
     const entry = dayMap[key];
     counts.push(entry ? (entry.count || 0) : 0);
     revenues.push(entry ? (entry.revenue || 0) : 0);

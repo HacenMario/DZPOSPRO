@@ -17,7 +17,7 @@
  *   • Web Push (VAPID) + Background Sync unchanged.
  * ============================================================ */
 
-const VERSION = 'v4.1.0';
+const VERSION = 'v4.2.0';
 const SHELL_CACHE = `dzpos-shell-${VERSION}`;
 const STATIC_CACHE = `dzpos-static-${VERSION}`;
 const API_CACHE = `dzpos-api-${VERSION}`;
@@ -37,6 +37,7 @@ const SHELL_ASSETS = [
     './css/theme-dark.css',
     './css/features.css',
     './css/upgrade.css',
+    './vendor/sweetalert2.min.css',
     './js/config.js',
     './js/toast.js',
     './js/api.js',
@@ -278,5 +279,11 @@ self.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
     if (event.data && event.data.type === 'SYNC_PENDING_OPS') {
         event.source && event.source.postMessage({ type: 'SYNC_PENDING_OPS' });
+    }
+    // v4.2 — version handshake: the page verifies it is driven by the
+    // CURRENT worker. A stale worker (kept alive by phones for weeks)
+    // is the root cause of "empty pages + Offline" after deployments.
+    if (event.data && event.data.type === 'GET_VERSION') {
+        event.source && event.source.postMessage({ type: 'VERSION', version: VERSION });
     }
 });

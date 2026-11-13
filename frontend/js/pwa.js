@@ -14,15 +14,12 @@
 (function (global) {
   'use strict';
 
-  // ===== v3.1: smart API base (mirrors config.js) =====
-  const API_BASE = (function () {
-    var o = '';
-    try { o = localStorage.getItem('dzpos_api_base') || window.DZPOS_API_BASE || ''; } catch (e) {}
-    if (o) return String(o).replace(/\/+$/, '');
-    if (location.protocol === 'file:') return 'https://dzpospro-production-ec3f34a9.up.railway.app';
-    if (/(^|\.)vercel\.app$/i.test(location.hostname || '')) return 'https://dzpospro-production-ec3f34a9.up.railway.app';
-    return '';
-  })();
+  // ===== v4.2: LIVE API base (js/config.js resolves + heals) =====
+  function API_BASE() {
+    return (typeof window.dzposApiBase === 'function'
+      ? window.dzposApiBase()
+      : (window.DZPOS_API_BASE || '')).replace(/\/+$/, '');
+  }
   const SW_PATH = './sw.js';
 
   let deferredPrompt = null;
@@ -34,6 +31,18 @@
     else console.log('[pwa]', msg);
   }
   function t(key, fb) { return (typeof window.t === 'function') ? window.t(key, fb) : fb; }
+
+  /* v4.2 — attach the app language to direct fetch() calls */
+  function langFetchOpts(extra) {
+    extra = extra || {};
+    var lang = 'ar';
+    try { lang = (window.currentLang || localStorage.getItem('lang') || 'ar').slice(0, 2); } catch (_) {}
+    var h = Object.assign({
+      'Accept-Language': lang,
+      'x-dzpos-lang': lang
+    }, extra.headers || {});
+    return Object.assign({}, extra, { headers: h });
+  }
 
   /* ---------- service worker ---------- */
   let reloadedForNewSW = false;
@@ -78,14 +87,64 @@
           swRegistration.update().catch(() => {});
         }
       });
+
+      // ===== v4.2 — STALE WORKER DETECTION (mobile "Offline" killer) =====
+      // A phone can keep an OLD service worker in control for days. It then
+      // serves an old app shell + old offline envelopes → empty pages +
+      // "Offline" even though the network is fine (clearing history does
+      // NOT remove service workers). We now ask the controlling worker for
+      // its version and force-unregister it when it doesn't match this build.
+      verifySWVersion(swRegistration);
     } catch (err) {
       console.warn('[pwa] SW registration failed:', err.message);
+    }
+  }
+
+  const EXPECTED_SW_VERSION = 'v4.2.0';
+  let swVersionChecked = false;
+
+  function verifySWVersion(registration) {
+    if (swVersionChecked) return;
+    const ctrl = (registration && registration.active) || navigator.serviceWorker.controller;
+    if (!ctrl) return;
+    let settled = false;
+    const chan = new MessageChannel();
+    chan.port1.onmessage = (ev) => {
+      settled = true;
+      const v = ev && ev.data && ev.data.version;
+      if (v && v !== EXPECTED_SW_VERSION) {
+        console.warn('[pwa] stale SW detected (' + v + ' ≠ ' + EXPECTED_SW_VERSION + ') → unregister + reload');
+        unregisterStaleWorkers(true);
+      }
+    };
+    try { ctrl.postMessage({ type: 'GET_VERSION' }, [chan.port2]); } catch (_) { settled = true; }
+    // No answer within 3 s → worker is too old to answer → replace it.
+    setTimeout(() => { if (!settled) unregisterStaleWorkers(true); }, 3000);
+    swVersionChecked = true;
+  }
+
+  async function unregisterStaleWorkers(reload) {
+    try {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const r of regs) { try { await r.unregister(); } catch (_) {} }
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.filter(k => k.indexOf('v4.2.0') === -1 && k.startsWith('dzpos-')).map(k => caches.delete(k)));
+      }
+    } catch (_) {}
+    if (reload && sessionStorage.getItem('dzpos_sw_purge') !== '1') {
+      try { sessionStorage.setItem('dzpos_sw_purge', '1'); } catch (_) {}
+      window.location.reload();
     }
   }
 
   function onSWMessage(event) {
     if (event.data && event.data.type === 'SYNC_PENDING_OPS') {
       replayQueue();
+    }
+    if (event.data && event.data.type === 'VERSION') {
+      // handled via MessageChannel in verifySWVersion; kept for completeness
+      if (event.data.version && event.data.version !== EXPECTED_SW_VERSION) unregisterStaleWorkers(true);
     }
   }
 
@@ -106,7 +165,7 @@
   async function replayQueue() {
     if (!global.OfflineDB) return;
     const token = localStorage.getItem('token');
-    await global.OfflineDB.replayPending(token, API_BASE);
+    await global.OfflineDB.replayPending(token, API_BASE());
     updateSyncChip();
   }
 
@@ -137,7 +196,7 @@
       const token = localStorage.getItem('token');
       if (!token) return false;
 
-      const keyRes = await fetch(API_BASE + '/api/push/public-key');
+      const keyRes = await fetch(API_BASE() + '/api/push/public-key', langFetchOpts());
       const keyJson = await keyRes.json();
       const publicKey = keyJson && keyJson.data && keyJson.data.publicKey;
       if (!publicKey) { if (!silent) toast('error', t('pushServerUnavailable', 'خدمة الإشعارات غير مهيأة على الخادم')); return false; }
@@ -152,7 +211,7 @@
       }
 
       const subJson = sub.toJSON();
-      await fetch(API_BASE + '/api/push/subscribe', {
+      await fetch(API_BASE() + '/api/push/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
         body: JSON.stringify({
