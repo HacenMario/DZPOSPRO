@@ -34,7 +34,10 @@ const ask = async (req, res, next) => {
             const quota = await gemini.checkQuota(req.storeId, req.store);
             if (!quota.allowed) { const e = new Error('AI_QUOTA_STORE'); e.code = 'AI_QUOTA_STORE'; throw e; }
         }
-        const result = await aiService.askQuestion({
+        // v4.5 — the accurate brain: deterministic data answers + full system
+        // knowledge base + Gemini (enriched) when a key is configured.
+        const brain = require('../services/assistantBrain');
+        const result = await brain.answerQuestion({
             storeId: req.storeId, userId: req.userId, question, lang, storeDoc: req.store
         });
         return successResponse(res, result);

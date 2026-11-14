@@ -1,10 +1,12 @@
 /* ============================================================
- * js/modules/platform.js — Super-admin platform console (v3.2)
- * Tabs: Overview · Stores · Backups
+ * js/modules/platform.js — Super-admin platform console (v4.5)
+ * Tabs: Overview · Stores · Subs · Plans · Backups
  *  • Overview: KPIs + trial warnings + recent stores + activity feed
  *  • Stores: search/filter table + create/edit modal (sections),
  *    users manager per store, extend trial, suspend/activate,
  *    login-as (2h impersonation), safe delete
+ *  • Plans (v4.5): subscription plan catalog — full CRUD (prices, limits,
+ *    badge, active/trial flags); record-payment modal uses the live catalog
  * Exports: renderPlatformPage({ apiBase })
  * ============================================================ */
 
@@ -21,6 +23,8 @@ export async function renderPlatformPage(ctx) {
       <button class="tab-btn active" data-tab="overview">📊 ${t('pfOverview', 'نظرة عامة')}</button>
       <button class="tab-btn" data-tab="stores">🏪 ${t('stores', 'المخازن')}</button>
       <button class="tab-btn" data-tab="subs">💼 ${t('pfSubsTab', 'الاشتراكات')}</button>
+      <!-- v4.5 — plans catalog tab -->
+      <button class="tab-btn" data-tab="plans">📦 ${t('pfPlansTab', 'الباقات')}</button>
       <button class="tab-btn" data-tab="backups">💾 ${t('backups', 'النسخ الاحتياطي')}</button>
     </div>
     <div class="tab-body" id="pfTabBody"></div>`;
@@ -35,11 +39,13 @@ export async function renderPlatformPage(ctx) {
     });
   });
 
-  function renderTab(name) {
+  // v4.5 — dispatcher made async so the plans tab render can be awaited
+  async function renderTab(name) {
     const body = content.querySelector('#pfTabBody');
     if (name === 'overview') renderOverview(body);
     else if (name === 'stores') renderStores(body);
     else if (name === 'subs') renderSubs(body);
+    else if (name === 'plans') await renderPlans(body); // v4.5 — plans catalog tab
     else renderBackups(body);
   }
 
@@ -180,7 +186,13 @@ export async function renderPlatformPage(ctx) {
 
   function planBadge(plan) {
     const cls = { trial: 'badge-warning', basic: 'badge-info', pro: 'badge-success', enterprise: 'badge-super' }[plan] || 'badge-muted';
-    return `<span class="badge ${cls}">${esc(plan || '—')}</span>`;
+    // v4.5 — prefer the LIVE catalog display name (plans are editable now)
+    let label = plan || '—';
+    try {
+      const names = (window.dzposPlanCatalogNames && window.dzposPlanCatalogNames[plan]) || null;
+      if (names) label = names;
+    } catch (_) {}
+    return `<span class="badge ${cls}">${esc(label)}</span>`;
   }
 
   function statusBadge(s) {
@@ -461,12 +473,9 @@ export async function renderPlatformPage(ctx) {
   }
 
   /* ================= SUBSCRIPTIONS (v4.3 billing console) ================= */
-  // Mirror of backend/config/plans.js — used for the manual-apply amount preview.
-  const PLAN_PRICES = {
-    basic:      { monthly: 2500,   yearly: 25000 },
-    pro:        { monthly: 5000,   yearly: 50000 },
-    enterprise: { monthly: 10000,  yearly: 100000 }
-  };
+  // v4.5 — hardcoded PLAN_PRICES mirror removed: the record-payment modal now
+  // reads prices live from the plan catalog (d.catalog) returned by
+  // /api/subscription/admin/overview.
   let subsCharts = [];
 
   const CYCLE_MONTHS = { monthly: 1, yearly: 12 };
@@ -495,6 +504,12 @@ export async function renderPlatformPage(ctx) {
       ]);
       d = r1.data || r1;
       reqs = (r2.data || r2).data || [];
+      // v4.5 — expose live plan names to planBadge()
+      if (Array.isArray(d.catalog)) {
+        const nm = {};
+        d.catalog.forEach(p => { nm[p.key] = p.name || p.key; });
+        window.dzposPlanCatalogNames = nm;
+      }
     } catch (err) {
       body.innerHTML = `<div class="empty-state"><div class="empty-title">⛔ ${esc(err.message)}</div></div>`; return;
     }
@@ -704,14 +719,20 @@ export async function renderPlatformPage(ctx) {
     body.querySelectorAll('.pf-edit').forEach(b => b.addEventListener('click', () => openStoreModal(b.dataset.id)));
     body.querySelectorAll('.sub-pay').forEach(b => b.addEventListener('click', () => {
       const storeId = b.dataset.id, name = b.dataset.name, curPlan = b.dataset.plan;
+      // v4.5 — dynamic plan catalog (d.catalog) instead of hardcoded PLAN_PRICES
+      const catalogMap = {};
+      (d.catalog || []).forEach(p => { catalogMap[p.key] = p; });
+      const payPlans = (d.catalog || []).filter(p => !p.isTrial && p.active);
+      const selKey = payPlans.some(p => p.key === curPlan) ? curPlan : (payPlans.length ? payPlans[0].key : '');
+      const selPlan = catalogMap[selKey];
       pfModal({
         title: '💳 ' + t('subApplyTitle', 'تسجيل دفع / تجديد اشتراك'),
-        subtitle: esc(name) + (PLAN_PRICES[curPlan] ? ` · ${t('plan', 'الخطة')}: ${curPlan}` : ''),
+        subtitle: esc(name) + (catalogMap[curPlan] && !catalogMap[curPlan].isTrial ? ` · ${t('plan', 'الخطة')}: ${esc(catalogMap[curPlan].name || curPlan)}` : ''),
         body: `
           <div class="pf-grid">
             <div><label class="pf-label">${t('subApplyPlan', 'الخطة')}</label>
               <select class="select" id="subMpPlan">
-                ${['basic', 'pro', 'enterprise'].map(p => `<option value="${p}" ${p === curPlan ? 'selected' : ''}>${p}</option>`).join('')}
+                ${payPlans.map(p => `<option value="${esc(p.key)}" ${p.key === selKey ? 'selected' : ''}>${esc(p.name || p.key)}</option>`).join('')}
               </select></div>
             <div><label class="pf-label">${t('subApplyCycle', 'الدورة')}</label>
               <select class="select" id="subMpCycle">
@@ -719,7 +740,7 @@ export async function renderPlatformPage(ctx) {
                 <option value="yearly">${t('subCycleYearly', 'سنوي')}</option>
               </select></div>
             <div><label class="pf-label">${t('subApplyMonths', 'المدة (أشهر)')}</label><input class="input" id="subMpMonths" type="number" min="1" max="36" value="1" /></div>
-            <div><label class="pf-label">${t('subReqAmount', 'المبلغ المستلم (DZD)')}</label><input class="input" id="subMpAmount" type="number" min="0" value="${PLAN_PRICES[curPlan] ? PLAN_PRICES[curPlan].monthly : 0}" /></div>
+            <div><label class="pf-label">${t('subReqAmount', 'المبلغ المستلم (DZD)')}</label><input class="input" id="subMpAmount" type="number" min="0" value="${selPlan ? (+selPlan.monthly || 0) : 0}" /></div>
             <div><label class="pf-label">${t('subReqMethod', 'طريقة الدفع')}</label>
               <select class="select" id="subMpMethod">
                 ${['ccp', 'baridimob', 'cash', 'bank_transfer', 'other', 'manual'].map(m => `<option value="${m}">${
@@ -744,9 +765,10 @@ export async function renderPlatformPage(ctx) {
         }
       });
       // live amount preview: price(plan,cycle) × months / cycleMonths
+      // (v4.5 — prices now come from the catalog map: catalogPlan.monthly / .yearly)
       const recalc = () => {
         const p = val('subMpPlan'), c = val('subMpCycle'), m = Math.max(1, +val('subMpMonths') || 1);
-        const price = PLAN_PRICES[p] ? (c === 'yearly' ? PLAN_PRICES[p].yearly : PLAN_PRICES[p].monthly) : 0;
+        const price = catalogMap[p] ? (c === 'yearly' ? catalogMap[p].yearly : catalogMap[p].monthly) : 0;
         const per = c === 'yearly' ? 12 : 1;
         document.getElementById('subMpAmount').value = Math.round(price * (m / per));
       };
@@ -756,6 +778,175 @@ export async function renderPlatformPage(ctx) {
         if (el) el.addEventListener('input', recalc);
       });
     }));
+  }
+
+  /* ================= PLANS (v4.5 — subscription plan catalog) ================= */
+  // v4.5 — new tab: full control over the plan catalog (prices, limits,
+  // badge, active/trial flags) via GET/POST/PUT/DELETE
+  // /api/subscription/admin/plans. DELETE removes the plan if unused by
+  // stores, otherwise the backend soft-retires it (active=false).
+  async function renderPlans(body) {
+    body.innerHTML = `<div class="loading-state"><div class="spinner"></div></div>`;
+    let d;
+    try {
+      const res = await apiFetch.get('/api/subscription/admin/plans');
+      d = res.data || res;
+    } catch (err) {
+      body.innerHTML = `<div class="empty-state"><div class="empty-title">⛔ ${esc(err.message)}</div></div>`; return;
+    }
+    const plans = (d.data || []).slice().sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || (+a.monthly || 0) - (+b.monthly || 0));
+    const money = (n) => Number(n || 0).toLocaleString('en-US');
+    const lim = (n) => (n == null || n === '' ? '—' : Number(n).toLocaleString('en-US'));
+    const activeCount = plans.filter(p => p.active).length;
+    const trialCount = plans.filter(p => p.isTrial).length;
+    const paidMonthlies = plans.filter(p => !p.isTrial).map(p => +p.monthly || 0).filter(n => n > 0);
+    const minM = paidMonthlies.length ? Math.min(...paidMonthlies) : null;
+    const maxM = paidMonthlies.length ? Math.max(...paidMonthlies) : null;
+
+    body.innerHTML = `
+      <div class="kpi-grid">
+        <div class="card kpi-card"><div class="kpi-label">📦 ${t('pfPlansKpiTotal', 'عدد الباقات')}</div><div class="kpi-value">${plans.length}</div><div class="kpi-sub">${plans.length - trialCount} ${t('pfPlanPaid', 'مدفوعة')} · ${trialCount} ${t('pfPlanTrial', 'تجريبية')}</div></div>
+        <div class="card kpi-card"><div class="kpi-label">✅ ${t('pfPlansKpiActive', 'الباقات النشطة')}</div><div class="kpi-value">${activeCount}</div><div class="kpi-sub">${plans.length - activeCount} ${t('pfPlanHidden', 'مخفية')}</div></div>
+        <div class="card kpi-card"><div class="kpi-label">⬇️ ${t('pfPlansKpiMin', 'أرخص شهري')}</div><div class="kpi-value">${minM != null ? money(minM) : '—'}</div><div class="kpi-sub">DZD</div></div>
+        <div class="card kpi-card"><div class="kpi-label">⬆️ ${t('pfPlansKpiMax', 'أغلى شهري')}</div><div class="kpi-value">${maxM != null ? money(maxM) : '—'}</div><div class="kpi-sub">DZD</div></div>
+      </div>
+      <div class="toolbar" style="margin-bottom:10px">
+        <div class="toolbar-right">
+          <button class="btn btn-primary" id="plAdd">➕ ${t('pfPlanAdd', 'باقة جديدة')}</button>
+        </div>
+      </div>
+      <div class="card"><div class="table-wrap"><table class="table table-hover">
+        <thead><tr>
+          <th>${t('pfPlansTablePlan', 'الباقة')}</th>
+          <th>${t('pfPlanMonthly', 'السعر الشهري')} <small class="muted">DZD</small></th>
+          <th>${t('pfPlanYearly', 'السعر السنوي')} <small class="muted">DZD</small></th>
+          <th>${t('pfPlanLimits', 'الحدود')}</th>
+          <th>${t('pfPlanType', 'النوع')}</th>
+          <th>${t('status', 'الحالة')}</th>
+          <th>${t('actions', 'إجراءات')}</th>
+        </tr></thead>
+        <tbody>
+          ${plans.length ? plans.map(p => {
+            const pid = p.id || p._id;
+            const fullYear = (+p.monthly || 0) * 12;
+            const save = (fullYear > 0 && +p.yearly > 0 && +p.yearly < fullYear) ? Math.round((1 - (+p.yearly / fullYear)) * 100) : 0;
+            return `
+            <tr>
+              <td><span class="badge ${esc(p.badge || 'badge-info')}">${esc(p.name || p.key)}</span><br/><small class="muted"><code dir="ltr">${esc(p.key)}</code></small></td>
+              <td>${money(p.monthly)} <small class="muted">DZD</small></td>
+              <td>${money(p.yearly)} <small class="muted">DZD</small>${save > 0 ? `<br/><small class="muted" title="${t('pfPlanYearlySaving', 'توفير سنوي')}">−${save}%</small>` : ''}</td>
+              <td><small class="muted">${lim(p.maxUsers)}👤 · ${lim(p.maxProducts)}📦 · ${lim(p.aiDailyCalls)}🤖</small></td>
+              <td>${p.isTrial ? `<span class="badge badge-warning">${t('pfPlanTrial', 'تجريبية')}</span>` : `<span class="badge badge-success">${t('pfPlanPaid', 'مدفوعة')}</span>`}</td>
+              <td>${p.active ? `<span class="badge badge-success">${t('pfPlanActive', 'نشطة')}</span>` : `<span class="badge badge-muted">${t('pfPlanHidden', 'مخفية')}</span>`}</td>
+              <td class="row-actions">
+                <button class="btn btn-sm btn-secondary pl-edit" data-id="${esc(pid)}">✏️ ${t('pfPlanEdit', 'تعديل')}</button>
+                <button class="btn btn-sm btn-danger pl-del" data-id="${esc(pid)}" data-name="${esc(p.name || p.key)}">🗑️ ${t('pfPlanDelete', 'حذف')}</button>
+              </td>
+            </tr>`;
+          }).join('') : `<tr><td colspan="7" class="empty-state">${t('pfPlansEmpty', 'لا باقات بعد — أنشئ أول باقة')}</td></tr>`}
+        </tbody>
+      </table></div></div>`;
+
+    body.querySelector('#plAdd').addEventListener('click', () => openPlanModal(null));
+    const planById = (id) => plans.find(p => String(p.id || p._id) === String(id));
+    body.querySelectorAll('.pl-edit').forEach(b => b.addEventListener('click', () => { const p = planById(b.dataset.id); if (p) openPlanModal(p); }));
+    body.querySelectorAll('.pl-del').forEach(b => b.addEventListener('click', () => { const p = planById(b.dataset.id); if (p) openPlanDeleteModal(p); }));
+  }
+
+  /* ---------- plan add / edit modal (v4.5) ---------- */
+  const PLAN_BADGES = ['badge-info', 'badge-success', 'badge-warning', 'badge-super', 'badge-danger', 'badge-muted'];
+
+  function openPlanModal(plan) {
+    const isEdit = !!plan;
+    const badgeLbl = {
+      'badge-info': t('pfPlanBadgeInfo', 'أزرق'),
+      'badge-success': t('pfPlanBadgeSuccess', 'أخضر'),
+      'badge-warning': t('pfPlanBadgeWarning', 'برتقالي'),
+      'badge-super': t('pfPlanBadgeSuper', 'بنفسجي'),
+      'badge-danger': t('pfPlanBadgeDanger', 'أحمر'),
+      'badge-muted': t('pfPlanBadgeMuted', 'رمادي')
+    };
+    const num = (v, fb) => (v == null || v === '' ? fb : v);
+    pfModal({
+      title: isEdit ? '✏️ ' + t('pfPlanEditTitle', 'تعديل الباقة') : '➕ ' + t('pfPlanAdd', 'باقة جديدة'),
+      subtitle: isEdit ? `${esc(plan.name || '')} · <code dir="ltr">${esc(plan.key || '')}</code>` : t('pfPlanNewHint', 'حدّد المعرّف والأسعار والحدود ثم احفظ'),
+      wide: true,
+      body: `
+        <div class="pf-section-title">🏷️ ${t('pfPlanInfo', 'معلومات الباقة')}</div>
+        <div class="pf-grid">
+          <div><label class="pf-label">${t('pfPlanName', 'اسم الباقة')} *</label><input class="input" id="plName" value="${esc(plan && plan.name || '')}" /></div>
+          ${!isEdit ? `<div><label class="pf-label">${t('pfPlanKey', 'المعرّف (key)')} *</label><input class="input" id="plKey" dir="ltr" placeholder="pro_plus" /><small class="muted">${t('pfPlanKeyHint', 'أحرف لاتينية وأرقام و - و _ فقط')}</small></div>` : ''}
+          <div><label class="pf-label">${t('pfPlanBadge', 'الشارة')}</label>
+            <select class="select" id="plBadge">
+              ${PLAN_BADGES.map(b => `<option value="${b}" ${((plan && plan.badge) || 'badge-info') === b ? 'selected' : ''}>${badgeLbl[b]}</option>`).join('')}
+            </select></div>
+          <div><label class="pf-label">${t('pfPlanMonthly', 'السعر الشهري (DZD)')}</label><input class="input" id="plMonthly" type="number" min="0" step="50" value="${num(plan && plan.monthly, 0)}" /></div>
+          <div><label class="pf-label">${t('pfPlanYearly', 'السعر السنوي (DZD)')}</label><input class="input" id="plYearly" type="number" min="0" step="50" value="${num(plan && plan.yearly, 0)}" /></div>
+          <div><label class="pf-label">${t('pfPlanMaxUsers', 'حد المستخدمين 👤')}</label><input class="input" id="plMaxUsers" type="number" min="1" value="${num(plan && plan.maxUsers, 5)}" /></div>
+          <div><label class="pf-label">${t('pfPlanMaxProducts', 'حد المنتجات 📦')}</label><input class="input" id="plMaxProducts" type="number" min="1" value="${num(plan && plan.maxProducts, 2000)}" /></div>
+          <div><label class="pf-label">${t('pfPlanAiDaily', 'حد طلبات AI يومياً 🤖')}</label><input class="input" id="plAi" type="number" min="0" value="${num(plan && plan.aiDailyCalls, 200)}" /></div>
+          ${!isEdit ? `<div><label class="pf-label">${t('pfPlanSortOrder', 'ترتيب العرض')}</label><input class="input" id="plSort" type="number" min="0" value="${num(plan && plan.sortOrder, 0)}" /></div>` : ''}
+          <div><label class="pf-label">${t('status', 'الحالة')}</label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:500">
+              <input type="checkbox" id="plActive" ${!plan || plan.active !== false ? 'checked' : ''} />
+              <span>${t('pfPlanActive', 'نشطة')} <small class="muted">— ${t('pfPlanActiveHint', 'تظهر للعملاء عند الاشتراك')}</small></span>
+            </label></div>
+          <div><label class="pf-label">${t('pfPlanTrialType', 'باقة تجريبية')}</label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:not-allowed;font-weight:500">
+              <input type="checkbox" id="plTrial" disabled ${plan && plan.isTrial ? 'checked' : ''} />
+              <span><small class="muted">${t('pfPlanTrialHint', 'التجريبية مجانية — بدون دفع')}</small></span>
+            </label></div>
+          <div class="pf-span2"><label class="pf-label">${t('pfPlanDesc', 'الوصف')}</label><textarea class="input" id="plDesc" rows="2">${esc(plan && plan.description || '')}</textarea></div>
+        </div>
+      `,
+      confirmText: isEdit ? t('save', 'حفظ') : t('pfPlanCreate', 'إنشاء الباقة'),
+      onConfirm: async (close) => {
+        const name = val('plName');
+        if (!name) { window.Toast && Toast.error(t('pfPlanNameRequired', 'اسم الباقة مطلوب')); return; }
+        const payload = {
+          name,
+          monthly: Math.max(0, +val('plMonthly') || 0),
+          yearly: Math.max(0, +val('plYearly') || 0),
+          maxUsers: Math.max(1, +val('plMaxUsers') || 1),
+          maxProducts: Math.max(1, +val('plMaxProducts') || 1),
+          aiDailyCalls: Math.max(0, +val('plAi') || 0),
+          active: !!(document.getElementById('plActive') && document.getElementById('plActive').checked),
+          badge: val('plBadge') || 'badge-info',
+          description: val('plDesc'),
+          isTrial: !!(document.getElementById('plTrial') && document.getElementById('plTrial').checked)
+        };
+        if (!isEdit) {
+          const key = val('plKey');
+          if (!key) { window.Toast && Toast.error(t('pfPlanKeyRequired', 'المعرّف (key) مطلوب')); return; }
+          if (!/^[A-Za-z0-9_-]+$/.test(key)) { window.Toast && Toast.error(t('pfPlanKeyInvalid', 'المعرّف غير صالح: أحرف لاتينية وأرقام و - و _ فقط')); return; }
+          payload.key = key;
+          payload.sortOrder = +val('plSort') || 0;
+        }
+        try {
+          if (isEdit) await apiFetch.put('/api/subscription/admin/plans/' + (plan.id || plan._id), payload);
+          else await apiFetch.post('/api/subscription/admin/plans', payload);
+          window.Toast && Toast.success(isEdit ? t('saved', 'تم الحفظ') : t('pfPlanCreated', 'تم إنشاء الباقة ✓'));
+          close(); refreshCurrent();
+        } catch (err) { window.Toast && Toast.error(err.message); }
+      }
+    });
+  }
+
+  /* ---------- plan delete / retire (v4.5) ---------- */
+  function openPlanDeleteModal(p) {
+    pfModal({
+      title: '🗑️ ' + t('pfPlanDelete', 'حذف الباقة'),
+      subtitle: `${esc(p.name || '')} · <code dir="ltr">${esc(p.key || '')}</code>`,
+      body: `<div>${esc(t('pfPlanDeleteConfirm', 'حذف الباقة؟ إذا كانت مستخدمة من متاجر سيتم إخفاؤها فقط.'))}</div>`,
+      confirmText: t('pfPlanDelete', 'حذف'),
+      onConfirm: async (close) => {
+        try {
+          await apiFetch.delete('/api/subscription/admin/plans/' + (p.id || p._id));
+          window.Toast && Toast.success(t('deleted', 'تم الحذف'));
+          close(); refreshCurrent();
+        } catch (err) { window.Toast && Toast.error(err.message); }
+      }
+    });
   }
 
   /* ================= BACKUPS (kept from v3) ================= */

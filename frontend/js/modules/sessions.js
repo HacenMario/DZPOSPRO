@@ -414,6 +414,77 @@ async function refreshAll() {
 }
 
 /* ---------- Open Session modal ---------- */
+
+/* ============================================================
+ * v4.5 — Controlcaisse: per-denomination cash counting
+ * ------------------------------------------------------------
+ * The store admin (or the super-admin for ALL stores at once)
+ * configures the currency denominations in Settings. When a list
+ * exists, opening AND closing a session STRICTLY requires counting
+ * each denomination; the money amount is derived server-side from
+ * the piece counts (never trusted from the client).
+ * ============================================================ */
+let __denoms = null;                       // cached [{value,type}]
+async function getDenominations() {
+  if (__denoms) return __denoms;
+  try {
+    const r = await apiFetch.get('/api/settings/cash-denominations');
+    __denoms = (r && r.data && r.data.denominations) || [];
+  } catch (_) { __denoms = []; }
+  return __denoms;
+}
+
+function denomInputsHtml(prefix, denoms) {
+  if (!denoms || !denoms.length) return '';
+  return `
+    <div class="denom-grid" id="${prefix}Grid">
+      ${denoms.map(d => `
+        <div class="denom-row">
+          <label class="denom-label" for="${prefix}_${d.value}">${d.value} <small>${d.type === 'coin' ? t('coinType', 'coin') : t('billType', 'bill')}</small></label>
+          <input class="input denom-count" id="${prefix}_${d.value}" data-value="${d.value}" type="number" min="0" step="1" inputmode="numeric" value="0" />
+          <div class="denom-sub" id="${prefix}Sub_${d.value}">0</div>
+        </div>`).join('')}
+    </div>
+    <div class="denom-total">
+      <span>${t('denomTotal', 'Counted total')}:</span>
+      <strong id="${prefix}Total">${fmtCurrency(0)}</strong>
+    </div>`;
+}
+
+function bindDenomInputs(root, prefix) {
+  const inputs = root.querySelectorAll('.denom-count');
+  const totalEl = root.querySelector('#' + prefix + 'Total');
+  function recalc() {
+    let total = 0;
+    inputs.forEach(inp => {
+      const v = Number(inp.dataset.value) || 0;
+      const c = Math.max(0, parseInt(inp.value, 10) || 0);
+      total += v * c;
+      const sub = root.querySelector('#' + prefix + 'Sub_' + inp.dataset.value);
+      if (sub) sub.textContent = (v * c).toLocaleString('en-US');
+    });
+    if (totalEl) totalEl.textContent = fmtCurrency(total);
+    return total;
+  }
+  inputs.forEach(inp => {
+    inp.addEventListener('input', recalc);
+    inp.addEventListener('focus', () => { try { inp.select(); } catch (_) {} });
+  });
+  recalc();
+  return recalc;
+}
+
+function collectCounts(root) {
+  const counts = {};
+  let any = false;
+  root.querySelectorAll('.denom-count').forEach(inp => {
+    const c = Math.max(0, parseInt(inp.value, 10) || 0);
+    counts[String(inp.dataset.value)] = c;
+    if (c > 0) any = true;
+  });
+  return any ? counts : null;
+}
+
 function openSessionModal() {
   const html = `
     <div class="modal-overlay" id="openSessionModal" role="dialog" aria-modal="true" aria-labelledby="openSessionTitle">
@@ -429,7 +500,14 @@ function openSessionModal() {
         </div>
         <form id="openSessionForm">
           <div class="modal-body">
-            <div class="form-group">
+            <div id="openCountsArea" hidden>
+              <div class="form-group">
+                <label class="form-label">💵 ${t('denomCountOpening', 'Count the cash by denomination')} <span class="req">*</span></label>
+                <div class="help-text">${t('denomCountOpeningHelp', 'Enter the number of banknotes/coins of each value in the drawer — the total is computed automatically')}</div>
+              </div>
+              <div id="openDenomsHost"></div>
+            </div>
+            <div class="form-group" id="openCashGroup">
               <label class="form-label">${t('openingCash', 'Opening cash')} <span class="req">*</span></label>
               <input class="input" id="openCash" type="number" min="0" step="0.01" required value="0" />
               <div class="help-text">${t('openingCashHelp', 'Amount of cash in the till at the start of the shift')}</div>
@@ -458,14 +536,42 @@ function openSessionModal() {
   overlay.querySelector('[data-action="cancel"]').addEventListener('click', close);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
 
+  // v4.5 — Controlcaisse: strict per-denomination counting when configured
+  let recalcOpen = null;
+  (async () => {
+    const denoms = await getDenominations();
+    if (denoms && denoms.length) {
+      const host = overlay.querySelector('#openDenomsHost');
+      const area = overlay.querySelector('#openCountsArea');
+      const cashGroup = overlay.querySelector('#openCashGroup');
+      if (host && area) {
+        host.innerHTML = denomInputsHtml('openDenom', denoms);
+        area.hidden = false;
+        if (cashGroup) cashGroup.hidden = true;
+        const cashInput = overlay.querySelector('#openCash');
+        if (cashInput) cashInput.removeAttribute('required');
+        recalcOpen = bindDenomInputs(host, 'openDenom');
+      }
+    }
+  })();
+
   overlay.querySelector('#openSessionForm').addEventListener('submit', async (e) => {
     e.preventDefault();
+    const openingCounts = collectCounts(overlay);
     const openingCash = parseFloat(overlay.querySelector('#openCash').value) || 0;
     const notes = overlay.querySelector('#openNotes').value.trim();
     const btn = overlay.querySelector('button[type="submit"]');
     if (btn) btn.disabled = true;
     try {
-      const r = await apiFetch.post('/api/sessions', { openingCash, notes });
+      const payload = { openingCash, notes };
+      if (recalcOpen) {
+        // strict mode — counts are mandatory
+        if (!openingCounts) {
+          throw new Error(t('sessionCountsRequired', '⛔ Enter the count of each denomination'));
+        }
+        payload.openingCounts = openingCounts;
+      }
+      const r = await apiFetch.post('/api/sessions', payload);
       if (r && r.success) {
         if (window.Toast) window.Toast.success(t('sessionOpened', 'Session opened'));
         close();
@@ -523,7 +629,15 @@ function closeSessionModal(session, stats) {
                 <div style="font-weight:700;color:var(--primary);">${fmtCurrency(expected)}</div>
               </div>
             </div>
-            <div class="form-group">
+            <div id="closeCountsArea" hidden>
+              <div class="form-group">
+                <label class="form-label">💵 ${t('denomCountClosing', 'Count the drawer by denomination')} <span class="req">*</span></label>
+                <div class="help-text">${t('denomCountClosingHelp', 'Count each banknote/coin value — the system compares it with the expected cash')}</div>
+              </div>
+              <div id="closeDenomsHost"></div>
+              <div class="help-text" id="diffLabelCounts" style="font-weight:700;margin-top:0.4rem;">${t('difference', 'Difference')}: ${fmtCurrency(0)}</div>
+            </div>
+            <div class="form-group" id="closeCashGroup">
               <label class="form-label">${t('countedCash', 'Counted cash in drawer')} <span class="req">*</span></label>
               <input class="input" id="closeCash" type="number" min="0" step="0.01" required value="${expected.toFixed(2)}" />
               <div class="help-text" id="diffLabel" style="font-weight:700;">${t('difference', 'Difference')}: ${fmtCurrency(0)}</div>
@@ -554,6 +668,41 @@ function closeSessionModal(session, stats) {
 
   const cashInput = overlay.querySelector('#closeCash');
   const diffLabel = overlay.querySelector('#diffLabel');
+  const diffLabelCounts = overlay.querySelector('#diffLabelCounts');
+
+  // v4.5 — Controlcaisse strict close: per-denomination counting
+  let recalcClose = null;
+  (async () => {
+    const denoms = await getDenominations();
+    if (denoms && denoms.length) {
+      const host = overlay.querySelector('#closeDenomsHost');
+      const area = overlay.querySelector('#closeCountsArea');
+      const group = overlay.querySelector('#closeCashGroup');
+      if (host && area) {
+        host.innerHTML = denomInputsHtml('closeDenom', denoms);
+        area.hidden = false;
+        if (group) group.hidden = true;
+        if (cashInput) cashInput.removeAttribute('required');
+        recalcClose = bindDenomInputs(host, 'closeDenom');
+        recalcClose.addEventListener2 = null;
+        // recompute the difference line after each input via hooking recalc
+        const baseRecalc = recalcClose;
+        recalcClose = () => {
+          const counted = baseRecalc();
+          if (diffLabelCounts) {
+            const diff = counted - expected;
+            const color = diff >= 0 ? 'var(--success)' : 'var(--danger)';
+            diffLabelCounts.style.color = color;
+            diffLabelCounts.textContent = t('difference', 'Difference') + ': ' + (diff > 0 ? '+' : '') + fmtCurrency(diff)
+              + (diff < 0 ? ' ⚠️' : '');
+          }
+          return counted;
+        };
+        recalcClose();
+      }
+    }
+  })();
+
   function updateDiff() {
     const counted = parseFloat(cashInput.value) || 0;
     const diff = counted - expected;
@@ -567,12 +716,20 @@ function closeSessionModal(session, stats) {
   overlay.querySelector('#closeSessionForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const id = overlay.querySelector('#closeSessionId').value;
+    const closingCounts = collectCounts(overlay);
     const closingCash = parseFloat(cashInput.value) || 0;
     const notes = overlay.querySelector('#closeNotes').value.trim();
     const btn = overlay.querySelector('button[type="submit"]');
     if (btn) btn.disabled = true;
     try {
-      const r = await apiFetch.put('/api/sessions/' + id + '/close', { closingCash, notes });
+      const payload = { closingCash, notes };
+      if (recalcClose) {
+        if (!closingCounts) {
+          throw new Error(t('sessionCountsRequired', '⛔ Enter the count of each denomination'));
+        }
+        payload.closingCounts = closingCounts;
+      }
+      const r = await apiFetch.put('/api/sessions/' + id + '/close', payload);
       if (r && r.success) {
         if (window.Toast) window.Toast.success(t('sessionClosed', 'Session closed'));
         const closedSession = (r.data && r.data.session) || null;

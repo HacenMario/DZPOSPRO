@@ -449,3 +449,117 @@
   .ins-kpis { grid-template-columns: 1fr; }
   .switch-slider { width: 58px; }
 }
+
+/* ===== v4.5 Employees & Attendance ===== */
+/* Employees list — name + job title stacked in one cell */
+.emp-name-block { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+.emp-job { font-size: 0.75rem; color: var(--text-muted, #64748b); }
+
+/* Attendance toolbar — compact date input */
+.att-date-input { max-width: 165px; }
+
+/* Status legend chips under the day-sheet toolbar */
+.att-legend {
+  display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center;
+  margin-bottom: 0.75rem;
+}
+.att-legend .badge { font-size: 0.7rem; padding: 0.2rem 0.55rem; }
+
+/* Day-sheet rows */
+.att-sheet .table td { vertical-align: middle; }
+.att-sheet .table .select,
+.att-sheet .table .input { min-width: 95px; }
+.att-sheet .att-notes-input { min-width: 130px; }
+.att-sheet .att-save-btn { white-space: nowrap; }
+
+/* Unsaved (dirty) row highlight + focus pulse when arriving from TAB A 📅 */
+.att-row-dirty { background: rgba(16, 185, 129, 0.07); }
+[data-theme="dark"] .att-row-dirty { background: rgba(16, 185, 129, 0.12); }
+.att-row-highlight { animation: attRowPulse 1.8s ease 1; }
+@keyframes attRowPulse {
+  0%, 100% { background: transparent; }
+  30%, 70% { background: rgba(16, 185, 129, 0.16); }
+}
+
+/* Mobile (≤480px): day-sheet cells become labelled cards — let the
+   status/time/notes inputs wrap onto their own line under the label */
+@media (max-width: 480px) {
+  .att-sheet .table td { flex-wrap: wrap; row-gap: 0.3rem; }
+  .att-sheet .table .select,
+  .att-sheet .table .input { flex: 1 1 110px; width: auto; min-width: 0; }
+  .att-legend { gap: 0.25rem; margin-bottom: 0.6rem; }
+  .att-legend .badge { font-size: 0.66rem; }
+}
+
+/* ============================================================
+ * v4.5 — Controlcaisse denomination counting (sessions + settings)
+ * ============================================================ */
+.denom-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.55rem;
+}
+.denom-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 10px;
+  background: var(--bg-card, #fff);
+}
+.denom-label { font-weight: 700; font-size: 0.85rem; min-width: 3.2rem; white-space: nowrap; }
+.denom-label small { display: block; font-weight: 500; font-size: 0.65rem; color: var(--text-muted, #64748b); }
+.denom-count { width: 64px !important; padding: 0.3rem 0.4rem !important; text-align: center; }
+.denom-sub { font-size: 0.72rem; color: var(--text-muted, #64748b); margin-inline-start: auto; white-space: nowrap; }
+.denom-total {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-top: 0.6rem; padding: 0.55rem 0.8rem;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px dashed rgba(16, 185, 129, 0.5);
+  border-radius: 10px; font-size: 0.9rem;
+}
+.denom-total strong { color: var(--primary, #10b981); font-size: 1.05rem; }
+
+/* settings editor rows */
+.denom-edit-row .input, .denom-edit-row .select { padding: 0.45rem 0.6rem; }
+
+/* ============================================================
+ * v4.5 — Permissions grid (Users page)
+ * ============================================================ */
+.perm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
+  gap: 0.45rem;
+}
+.perm-group { margin-bottom: 0.75rem; }
+.perm-group-title {
+  font-size: 0.78rem; font-weight: 800; color: var(--text-muted, #64748b);
+  text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 0.4rem;
+}
+.perm-item {
+  display: flex; align-items: center; gap: 0.45rem;
+  padding: 0.42rem 0.6rem; border: 1px solid var(--border, #e5e7eb);
+  border-radius: 9px; font-size: 0.82rem; cursor: pointer;
+  background: var(--bg-card, #fff); transition: border-color .15s, background .15s;
+}
+.perm-item:hover { border-color: var(--primary, #10b981); }
+.perm-item.granted { border-color: rgba(16,185,129,.45); background: rgba(16,185,129,.06); }
+.perm-item input { width: 15px; height: 15px; accent-color: #10b981; flex-shrink: 0; }
+.perm-item .perm-def { margin-inline-start: auto; color: var(--primary, #10b981); font-size: 0.7rem; }
+@media (max-width: 560px) {
+  .perm-grid { grid-template-columns: 1fr; }
+  .denom-grid { grid-template-columns: 1fr 1fr; }
+}
+
+/* ============================================================
+ * v4.5 — AI provenance chip
+ * ============================================================ */
+.chat-src {
+  margin-top: 0.45rem;
+  padding-top: 0.4rem;
+  border-top: 1px dashed var(--border, #e5e7eb);
+  font-size: 0.7rem;
+  color: var(--text-muted, #64748b);
+  opacity: 0.9;
+}

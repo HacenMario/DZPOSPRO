@@ -251,11 +251,12 @@ export async function renderAiPage(ctx) {
    * 1) ASSISTANT
    * ============================================================ */
   function renderAssistant(body) {
+    // v4.5 — broader quick questions: business data AND system how-to
     const quick = lang === 'ar'
-      ? ['كم مبيعات هذا الشهر؟', 'أي المنتجات الأكثر مبيعاً؟', 'ما المنتجات قريبة النفاد؟', 'قارن هذا الأسبوع بالماضي']
+      ? ['مبيعات اليوم', 'مبيعات هذا الشهر', 'أي المنتجات الأكثر مبيعاً؟', 'ما المنتجات قريبة النفاد؟', 'قارن هذا الأسبوع بالماضي', 'أفضل العملاء', 'كيف أضيف منتجاً؟', 'كيف أفتح جلسة صندوق؟', 'كيف يعمل الدوام؟', 'كيف أعدل الباقات والأسعار؟']
       : lang === 'fr'
-        ? ['Quelles sont les ventes de ce mois ?', 'Quels sont les produits les plus vendus ?', 'Quels produits sont presque épuisés ?', 'Compare cette semaine à la précédente']
-        : ['How are this month\'s sales?', 'Which products sell most?', 'Which products are running low?', 'Compare this week with last week'];
+        ? ['Ventes d\'aujourd\'hui', 'Ventes de ce mois', 'Produits les plus vendus ?', 'Produits presque épuisés ?', 'Compare cette semaine à la précédente', 'Meilleurs clients', 'Comment ajouter un produit ?', 'Comment ouvrir une session caisse ?', 'Comment fonctionne le pointage ?', 'Comment modifier les plans et prix ?']
+        : ['Sales today', 'Sales this month', 'Which products sell most?', 'Which products are running low?', 'Compare this week with last week', 'Top customers', 'How to add a product?', 'How to open a cash session?', 'How does attendance work?', 'How to edit plans and prices?'];
 
     body.innerHTML = `
       <div class="chat-wrap card">
@@ -294,8 +295,16 @@ export async function renderAiPage(ctx) {
       try {
         const res = await apiFetch.post('/api/ai/ask', { question, lang });
         const answer = (res.data && res.data.answer) || res.answer || '…';
+        const srcKind = (res.data && res.data.source) || res.source || '';
         msgs.querySelector('.typing').parentElement.remove();
-        msgs.insertAdjacentHTML('beforeend', `<div class="chat-msg bot"><div class="bubble">${fmt(answer)}</div></div>`);
+        // v4.5 — small provenance chip: engine (exact numbers) / kb (manual) / gemini
+        const SRC_LABEL = {
+          engine: t('aiSrcEngine', '⚙️ حساب دقيق من بياناتك'),
+          kb: t('aiSrcKb', '📘 دليل النظام'),
+          gemini: t('aiSrcGemini', '🤖 إجابة ذكية')
+        };
+        const chip = SRC_LABEL[srcKind] || '';
+        msgs.insertAdjacentHTML('beforeend', `<div class="chat-msg bot"><div class="bubble">${fmt(answer)}${chip ? `<div class="chat-src">${chip}</div>` : ''}</div></div>`);
       } catch (err) {
         msgs.querySelector('.typing')?.parentElement.remove();
         msgs.insertAdjacentHTML('beforeend', `<div class="chat-msg bot"><div class="bubble error">⛔ ${esc(err.message)}</div></div>`);

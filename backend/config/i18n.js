@@ -98,6 +98,7 @@ const translations = {
         // Sessions
         sessionOpened: 'تم فتح الجلسة بنجاح',
         sessionAlreadyOpen: 'لديك جلسة مفتوحة بالفعل. يجب إغلاقها أولاً',
+        sessionCountsRequired: '⛔ ، يجب جرد الفئات النقدية أولاً',
         sessionClosed: 'تم إغلاق الجلسة بنجاح',
         sessionNotFound: 'لا توجد جلسة مفتوحة لإغلاقها',
 
@@ -235,6 +236,7 @@ const translations = {
         // Sessions
         sessionOpened: 'Session opened successfully',
         sessionAlreadyOpen: 'You already have an open session. Close it first',
+        sessionCountsRequired: '⛔  — the cash denominations count is required first',
         sessionClosed: 'Session closed successfully',
         sessionNotFound: 'No open session to close',
 
@@ -372,6 +374,7 @@ const translations = {
         // Sessions
         sessionOpened: 'Session ouverte avec succès',
         sessionAlreadyOpen: 'Vous avez déjà une session ouverte. Fermez-la d\'abord',
+        sessionCountsRequired: '⛔  — le décompte des coupures est requis d\'abord',
         sessionClosed: 'Session fermée avec succès',
         sessionNotFound: 'Aucune session ouverte à fermer',
 
@@ -509,6 +512,7 @@ const translations = {
         // Oturumlar
         sessionOpened: 'Oturum başarıyla açıldı',
         sessionAlreadyOpen: 'Zaten açık bir oturumunuz var. Önce kapatın',
+        sessionCountsRequired: '⛔  — önce kasa kesim sayımı gerekli',
         sessionClosed: 'Oturum başarıyla kapatıldı',
         sessionNotFound: 'Kapatılacak açık oturum yok',
 
@@ -647,6 +651,7 @@ const translations = {
         // Sesiones
         sessionOpened: 'Sesión abierta con éxito',
         sessionAlreadyOpen: 'Ya tiene una sesión abierta. Ciérrela primero',
+        sessionCountsRequired: '⛔  — primero se requiere el recuento de efectivo',
         sessionClosed: 'Sesión cerrada con éxito',
         sessionNotFound: 'No hay sesión abierta para cerrar',
 
@@ -785,6 +790,7 @@ const translations = {
         // Sessioni
         sessionOpened: 'Sessione aperta con successo',
         sessionAlreadyOpen: 'Hai già una sessione aperta. Chiudila prima',
+        sessionCountsRequired: '⛔  — prima è richiesto il conteggio del contante',
         sessionClosed: 'Sessione chiusa con successo',
         sessionNotFound: 'Nessuna sessione aperta da chiudere',
 
@@ -923,6 +929,7 @@ const translations = {
         // Schichten
         sessionOpened: 'Schicht erfolgreich geöffnet',
         sessionAlreadyOpen: 'Sie haben bereits eine offene Schicht. Schließen Sie diese zuerst',
+        sessionCountsRequired: '⛔  — die Bargeldzählung ist zuerst erforderlich',
         sessionClosed: 'Schicht erfolgreich geschlossen',
         sessionNotFound: 'Keine offene Schicht zum Schließen',
 
@@ -1061,6 +1068,7 @@ const translations = {
         // Смены
         sessionOpened: 'Смена успешно открыта',
         sessionAlreadyOpen: 'У вас уже есть открытая смена. Сначала закройте её',
+        sessionCountsRequired: '⛔  — сначала требуется пересчёт наличных',
         sessionClosed: 'Смена успешно закрыта',
         sessionNotFound: 'Нет открытой смены для закрытия',
 
@@ -1199,6 +1207,7 @@ const translations = {
         // 班次
         sessionOpened: '班次开启成功',
         sessionAlreadyOpen: '您已有进行中的班次，请先交班',
+        sessionCountsRequired: '⛔  — 必须先录入现金面额清点',
         sessionClosed: '班次关闭成功',
         sessionNotFound: '没有可关闭的进行中班次',
 

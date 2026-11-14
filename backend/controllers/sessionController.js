@@ -1,12 +1,47 @@
 // backend/controllers/sessionController.js
 const Session = require('../models/Session');
 const Sale = require('../models/Sale');
+const Setting = require('../models/Setting');
 const { getTranslation } = require('../config/i18n');
 const logger = require('../utils/logger');
 const { successResponse, createdResponse, errorResponse, paginatedResponse } = require('../utils/response');
 const { parsePagination } = require('../utils/pagination');
 
-// POST /api/sessions  { openingCash, notes }
+// v4.5 — Controlcaisse helpers ------------------------------------------
+// The counted cash value is ALWAYS derived server-side from the
+// per-denomination piece counts — the client only sends counts.
+function computeAmountFromCounts(counts, denominations) {
+    if (!counts || typeof counts !== 'object') return null;
+    let total = 0;
+    let anyKey = false;
+    for (const d of denominations || []) {
+        const k = String(d.value);
+        const c = Number(counts[k]);
+        if (Number.isFinite(c) && c > 0) { total += d.value * c; anyKey = true; }
+    }
+    return anyKey || Object.keys(counts).length ? Math.max(0, Math.round(total * 100) / 100) : 0;
+}
+
+function normalizeCounts(counts) {
+    if (!counts || typeof counts !== 'object') return null;
+    const out = {};
+    for (const [k, v] of Object.entries(counts)) {
+        const n = Number(v);
+        if (Number.isFinite(n) && n >= 0) out[String(k)] = n;
+    }
+    return Object.keys(out).length ? out : null;
+}
+
+// The store's configured cash denominations (from its Setting document).
+async function storeDenominations() {
+    try {
+        const s = await Setting.findOne({}).select('cashDenominations').lean();
+        const list = (s && Array.isArray(s.cashDenominations)) ? s.cashDenominations : [];
+        return list.filter(d => Number(d.value) > 0).map(d => ({ value: Number(d.value), type: d.type || 'bill' }));
+    } catch (_) { return []; }
+}
+
+// POST /api/sessions  { openingCash | openingCounts, notes }
 const openSession = async (req, res, next) => {
     try {
         const lang = req.lang || 'ar';
@@ -15,13 +50,27 @@ const openSession = async (req, res, next) => {
         const existing = await Session.findOne({ user: req.userId, status: 'open' });
         if (existing) return errorResponse(res, 400, getTranslation('sessionAlreadyOpen', lang));
 
+        // v4.5 — strict Controlcaisse: when the store has cash denominations
+        // configured, a per-denomination count is REQUIRED at open. The
+        // opening balance is computed server-side from the counts.
+        const denominations = await storeDenominations();
+        let openingBalance = parseFloat(openingCash) || 0;
+        let openingCounts = normalizeCounts((req.body || {}).openingCounts);
+        if (denominations.length) {
+            if (!openingCounts) {
+                return errorResponse(res, 400, getTranslation('sessionCountsRequired', lang));
+            }
+            openingBalance = computeAmountFromCounts(openingCounts, denominations) || 0;
+        }
+
         const lastSession = await Session.findOne({ user: req.userId, status: 'closed' }).sort({ closedAt: -1 });
 
         const session = new Session({
             user: req.userId,
             userName: req.user.name || 'Cashier',
             userRole: req.user.role || 'cashier',
-            openingBalance: parseFloat(openingCash) || 0,
+            openingBalance,
+            openingCounts: openingCounts || undefined,
             status: 'open',
             notes: notes || '',
             openedAt: new Date()
@@ -68,7 +117,7 @@ const getCurrentSession = async (req, res, next) => {
     }
 };
 
-// PUT /api/sessions/:id/close  { closingCash, notes }
+// PUT /api/sessions/:id/close  { closingCash | closingCounts, notes }
 const closeSession = async (req, res, next) => {
     try {
         const lang = req.lang || 'ar';
@@ -77,6 +126,19 @@ const closeSession = async (req, res, next) => {
         const session = await Session.findById(req.params.id);
         if (!session) return errorResponse(res, 404, getTranslation('sessionNotFound', lang));
         if (session.status === 'closed') return errorResponse(res, 400, getTranslation('sessionNotFound', lang));
+        // only the owner of the session (or an admin/manager) may close it
+        const canClose = String(session.user) === String(req.userId) || ['admin', 'manager', 'superadmin'].includes(req.user.role);
+        if (!canClose) return errorResponse(res, 403, getTranslation('forbidden', lang));
+
+        const denominations = await storeDenominations();
+        const closingCounts = normalizeCounts((req.body || {}).closingCounts);
+        let actualCash = parseFloat(closingCash) || 0;
+        if (denominations.length) {
+            if (!closingCounts) {
+                return errorResponse(res, 400, getTranslation('sessionCountsRequired', lang));
+            }
+            actualCash = computeAmountFromCounts(closingCounts, denominations) || 0;
+        }
 
         const sales = await Sale.find({ session: session._id, status: 'completed' });
         const totalSales = sales.reduce((s, x) => s + x.total, 0);
@@ -88,7 +150,6 @@ const closeSession = async (req, res, next) => {
         const transferSales = sales.filter(s => s.paymentMethod === 'transfer').reduce((s, x) => s + x.total, 0);
 
         const expectedCash = (session.openingBalance || 0) + cashSales;
-        const actualCash = parseFloat(closingCash) || 0;
         const difference = actualCash - expectedCash;
 
         session.closingBalance = totalSales;
@@ -102,6 +163,7 @@ const closeSession = async (req, res, next) => {
         session.expectedCash = expectedCash;
         session.actualCash = actualCash;
         session.difference = difference;
+        if (closingCounts) session.closingCounts = closingCounts;
         session.status = 'closed';
         session.closedAt = new Date();
         if (notes) session.notes = notes;

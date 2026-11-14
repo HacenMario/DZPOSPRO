@@ -104,5 +104,81 @@ const getGeminiKeyStatus = async (req, res, next) => {
     } catch (err) { next(err); }
 };
 
+/* ============================================================
+ * v4.5 — Controlcaisse cash denominations
+ *   GET  /api/settings/cash-denominations
+ *        → the effective list for THIS store (or the platform doc for
+ *          the super-admin without focus).
+ *   PUT  /api/settings/cash-denominations { denominations:[{value,type}], applyToAll }
+ *        • store admin → saves into HIS store's settings
+ *        • super-admin → saves into the platform document, and with
+ *          applyToAll:true ALSO writes the same list into EVERY store's
+ *          settings (automatic platform-wide push after save).
+ * ============================================================ */
+const getCashDenominations = async (req, res, next) => {
+    try {
+        const filter = (req.user && req.user.role === 'superadmin')
+            ? { storeId: (req.storeFocus && String(req.storeFocus)) || null }
+            : {};
+        let setting = await Setting.findOne(filter).select('cashDenominations').lean();
+        if (!setting) {
+            const created = await Setting.create({ storeId: (req.user && req.user.role === 'superadmin') ? (req.storeFocus || null) : undefined });
+            setting = { cashDenominations: created.cashDenominations || [] };
+        }
+        return successResponse(res, { denominations: (setting.cashDenominations || []).map(d => ({ value: d.value, type: d.type })) });
+    } catch (err) { next(err); }
+};
+
+const updateCashDenominations = async (req, res, next) => {
+    try {
+        const lang = req.lang || 'ar';
+        const raw = (req.body && req.body.denominations) || [];
+        // normalize + validate: positive values, dedup, sorted desc
+        const seen = new Set();
+        const list = [];
+        for (const d of Array.isArray(raw) ? raw : []) {
+            const value = Math.round(Number(d && d.value));
+            if (!Number.isFinite(value) || value <= 0) continue;
+            if (seen.has(value)) continue;
+            seen.add(value);
+            list.push({ value, type: d.type === 'coin' ? 'coin' : 'bill' });
+        }
+        list.sort((a, b) => b.value - a.value);
+
+        const isSuper = req.user && req.user.role === 'superadmin';
+        const applyToAll = !!(req.body && req.body.applyToAll);
+
+        if (isSuper) {
+            // platform document (storeId null) or the focused store
+            const focus = req.storeFocus || null;
+            await Setting.findOneAndUpdate(
+                { storeId: focus ? String(focus) : null },
+                { $set: { cashDenominations: list } },
+                { new: true, upsert: true, runValidators: true }
+            );
+            let appliedStores = 0;
+            if (applyToAll && !focus) {
+                // v4.5 — one save → ALL stores get the same denominations
+                const resAll = await Setting.updateMany(
+                    { storeId: { $ne: null } },
+                    { $set: { cashDenominations: list } }
+                );
+                appliedStores = resAll.modifiedCount || resAll.nModified || 0;
+            }
+            return successResponse(res, { denominations: list, appliedToAllStores: applyToAll ? appliedStores : null }, getTranslation('saved', lang));
+        }
+
+        // store admin — his own (tenant plugin scopes the query automatically)
+        await Setting.findOneAndUpdate(
+            {},
+            { $set: { cashDenominations: list } },
+            { new: true, upsert: true, runValidators: true }
+        );
+        return successResponse(res, { denominations: list }, getTranslation('saved', lang));
+    } catch (err) { next(err); }
+};
+
 module.exports.setGeminiKey = setGeminiKey;
 module.exports.getGeminiKeyStatus = getGeminiKeyStatus;
+module.exports.getCashDenominations = getCashDenominations;
+module.exports.updateCashDenominations = updateCashDenominations;

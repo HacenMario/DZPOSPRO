@@ -195,6 +195,8 @@ app.post('/api/register', async (req, res) => {
     }
 });
 
+const authMiddleware = require('./middleware/auth');
+
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/products', require('./routes/products'));
@@ -220,6 +222,9 @@ app.use('/api/backups', require('./routes/backups'));
 app.use('/api/audit', require('./routes/audit'));
 app.use('/api/ai', require('./routes/ai'));
 app.use('/api/alerts', require('./routes/alertConfigs'));
+// v4.5 — employees & attendance + permission catalog
+app.use('/api/employees', require('./routes/employees'));
+app.use('/api/permissions', authMiddleware, tenantMiddleware, require('./controllers/userController').listPermissions);
 
 // ----- 404 (JSON for API) -----
 app.use('/api', notFound);
@@ -296,6 +301,13 @@ global.sendStoreNotification = (storeId, notification) => {
         await connectDB();
     } catch (e) {
         logger.warn(`DB unavailable at boot — continuing without it: ${e.message}`);
+    }
+
+    // v4.5 — seed the dynamic subscription-plan catalog on first boot
+    try {
+        if (getConnectionState()) await require('./services/planService').ensureSeeded();
+    } catch (e) {
+        logger.warn(`Plan seed skipped: ${e.message}`);
     }
 
     // ===== v3 — scheduled jobs (crons) =====

@@ -54,10 +54,16 @@ const getUserById = async (req, res, next) => {
     }
 };
 
+// GET /api/permissions — v4.5 permission catalog for the Users page editor.
+const listPermissions = (req, res) => {
+    const { CATALOG, ROLE_DEFAULTS } = require('../config/permissions');
+    return successResponse(res, { catalog: CATALOG, roleDefaults: ROLE_DEFAULTS });
+};
+
 // POST /api/users  (admin)
 const createUser = async (req, res, next) => {
     try {
-        const { name, email, password, phone, role, isActive, settings } = req.body;
+        const { name, email, password, phone, role, isActive, settings, permissions } = req.body;
         const lang = req.lang || 'ar';
 
         const existing = await User.findOne({ email: { $regex: new RegExp('^' + (email || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i') } });
@@ -67,20 +73,28 @@ const createUser = async (req, res, next) => {
             name, email: (email || '').trim(), password,
             phone: phone || '', role: role || 'cashier',
             isActive: isActive !== undefined ? isActive : true,
-            settings: settings || undefined
+            settings: settings || undefined,
+            permissions: validPerms(permissions)
         });
         await user.save();
-        return createdResponse(res, { user: { id: user._id, name: user.name, email: user.email, role: user.role } }, getTranslation('userCreated', lang));
+        return createdResponse(res, { user: { id: user._id, name: user.name, email: user.email, role: user.role, permissions: user.permissions } }, getTranslation('userCreated', lang));
     } catch (err) {
         logger.error('createUser error:', err.message);
         next(err);
     }
 };
 
+// v4.5 — keep only known permission keys (unknown values are dropped).
+function validPerms(list) {
+    const { PERM_KEYS } = require('../config/permissions');
+    if (!Array.isArray(list)) return undefined;
+    return [...new Set(list.filter(p => PERM_KEYS.includes(p)))];
+}
+
 // PUT /api/users/:id  (admin)
 const updateUser = async (req, res, next) => {
     try {
-        const { name, phone, role, isActive, settings, password } = req.body;
+        const { name, phone, role, isActive, settings, password, permissions } = req.body;
         const lang = req.lang || 'ar';
 
         const user = await User.findById(req.params.id);
@@ -91,6 +105,11 @@ const updateUser = async (req, res, next) => {
         if (role !== undefined) user.role = role;
         if (isActive !== undefined) user.isActive = isActive;
         if (settings) user.settings = { ...(user.settings.toObject?.() || user.settings), ...settings };
+        // v4.5 — permission grants (never for admin/superadmin — they always have all)
+        if (permissions !== undefined && !['admin', 'superadmin'].includes(user.role)) {
+            const vp = validPerms(permissions);
+            if (vp) user.permissions = vp;
+        }
 
         // Password reset (optional field — only update if a non-empty value is provided)
         if (password && typeof password === 'string' && password.trim().length >= 6) {
@@ -121,4 +140,4 @@ const deleteUser = async (req, res, next) => {
     }
 };
 
-module.exports = { getUsers, getUserById, createUser, updateUser, deleteUser };
+module.exports = { getUsers, getUserById, createUser, updateUser, deleteUser, listPermissions };

@@ -129,7 +129,30 @@ const createSale = async (req, res, next) => {
             }
         } else {
             sessionDoc = await Session.findOne({ user: req.userId, status: 'open' });
-            if (!sessionDoc) return errorResponse(res, 403, getTranslation('sessionRequired', lang));
+            if (!sessionDoc) {
+                // v4.5 — OFFLINE SYNC: a sale replayed from an offline device
+                // must never be lost even if its session was closed in the
+                // meantime. Explicit `offlineSync: true` (stamped by the
+                // client's offline queue) attaches it to the user's latest
+                // session — the strict open/close Controlcaisse rules remain
+                // untouched for normal (interactive) sales.
+                if (req.body && req.body.offlineSync) {
+                    sessionDoc = await Session.findOne({ user: req.userId }).sort({ openedAt: -1 });
+                    if (!sessionDoc) {
+                        sessionDoc = await Session.create({
+                            user: req.userId,
+                            userName: req.user.name || 'Cashier',
+                            userRole: req.user.role || 'cashier',
+                            openingBalance: 0,
+                            status: 'closed',
+                            closedAt: new Date(),
+                            notes: 'offline-sync'
+                        });
+                    }
+                } else {
+                    return errorResponse(res, 403, getTranslation('sessionRequired', lang));
+                }
+            }
         }
 
         let settings = await Setting.findOne();

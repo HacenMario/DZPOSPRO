@@ -11,6 +11,13 @@ const sessionSchema = new mongoose.Schema({
     openingBalance: { type: Number, default: 0, min: 0 },
     closingBalance: { type: Number, default: 0, min: 0 },
 
+    // v4.5 — Controlcaisse strict cash count: per-denomination piece counts
+    // captured at open AND close ({ "500": 3, "200": 5 … }). The money value
+    // is derived server-side (Σ value × count) — never trusted from client.
+    // Mixed (plain object) so the counts survive JSON serialization intact.
+    openingCounts: { type: mongoose.Schema.Types.Mixed, default: null },
+    closingCounts: { type: mongoose.Schema.Types.Mixed, default: null },
+
     totalSales: { type: Number, default: 0 },
     totalDiscount: { type: Number, default: 0 },
     totalTax: { type: Number, default: 0 },

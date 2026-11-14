@@ -78,7 +78,9 @@ function renderTabs() {
     // v3 — AI + smart alerts (admin/manager only)
     ...(state.isAdmin ? [
       { id: 'ai',          label: '🤖 ' + t('aiTab', 'الذكاء الاصطناعي'),          icon: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/>' },
-      { id: 'alerts',      label: '🔔 ' + t('alertsTab', 'التنبيهات الذكية'),      icon: '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>' }
+      { id: 'alerts',      label: '🔔 ' + t('alertsTab', 'التنبيهات الذكية'),      icon: '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>' },
+      // v4.5 — Controlcaisse currency denominations
+      { id: 'cash',        label: '💵 ' + t('cashDenomTab', 'فئات النقدية'),       icon: '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/>' }
     ] : [])
   ];
   return `
@@ -685,6 +687,7 @@ function renderTabContent() {
     case 'connection': return renderConnectionTab();
     case 'ai':         return renderAiTab();
     case 'alerts':     return renderAlertsTab();
+    case 'cash':       return renderCashTab();
     default:           return renderStoreTab();
   }
 }
@@ -698,6 +701,7 @@ function bindTabContent() {
     case 'connection': bindConnectionTab(); break;
     case 'ai':         bindAiTab(); break;
     case 'alerts':     bindAlertsTab(); break;
+    case 'cash':       bindCashTab(); break;
   }
 }
 
@@ -763,6 +767,111 @@ async function loadCurrentUser() {
     // /me might fail; rely on localStorage user
     console.warn('[settings] /auth/me', err);
   }
+}
+
+
+/* ============================================================
+ * v4.5 — 💵 Controlcaisse: cash denominations (فئات النقدية)
+ * The store admin edits HIS store's list. The super-admin edits the
+ * platform list and can push it to ALL stores with one save
+ * (applyToAll → same list written into every store automatically).
+ * The list is then STRICTLY required when opening/closing sessions.
+ * ============================================================ */
+function renderCashTab() {
+  const isSuper = state.user && state.user.role === 'superadmin';
+  const list = state.cashDenoms || [];
+  const rows = (list.length ? list : [{ value: 2000, type: 'bill' }, { value: 1000, type: 'bill' }, { value: 500, type: 'bill' }, { value: 200, type: 'bill' }, { value: 100, type: 'bill' }, { value: 50, type: 'bill' }, { value: 20, type: 'coin' }, { value: 10, type: 'coin' }, { value: 5, type: 'coin' }]);
+  return `
+    <div class="card">
+      <div class="card-header"><div class="card-title">💵 ${t('cashDenomTitle', 'فئات النقدية — Controlcaisse')}</div></div>
+      <div class="card-body">
+        <div class="help-text" style="margin-bottom:0.75rem;">${t('cashDenomHelp', 'حدد فئات العملة المتوفرة في الصندوق. عند فتح أو إغلاق جلسة سيُطلب جرد العدد لكل فئة ويُحسب المبلغ تلقائياً.')}</div>
+        <div id="denomEditor"></div>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.75rem;">
+          <button class="btn btn-secondary btn-sm" id="denomAddRow" type="button">➕ ${t('cashDenomAdd', 'إضافة فئة')}</button>
+        </div>
+        ${isSuper ? `
+        <label style="display:flex;align-items:flex-start;gap:0.5rem;margin-top:1rem;padding:0.75rem;background:rgba(16,185,129,.07);border:1px solid rgba(16,185,129,.35);border-radius:10px;cursor:pointer;">
+          <input type="checkbox" id="denomApplyAll" checked style="width:17px;height:17px;accent-color:#10b981;margin-top:2px;" />
+          <span style="font-size:0.88rem;">
+            <strong>🌐 ${t('cashDenomApplyAll', 'تطبيق على كل المتاجر تلقائياً بعد الحفظ')}</strong>
+            <div style="color:var(--text-muted);font-size:0.8rem;margin-top:0.2rem;">${t('cashDenomApplyAllHelp', 'سيتم حفظ نفس القائمة في إعدادات جميع المتاجر المنشورة على المنصة.')}</div>
+          </span>
+        </label>` : ''}
+        <div style="margin-top:1rem;">
+          <button class="btn btn-primary" id="denomSave" type="button">💾 ${t('save', 'حفظ')}</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function denomEditorRows(list) {
+  return list.map(d => `
+    <div class="denom-edit-row" style="display:grid;grid-template-columns:1fr 1fr auto;gap:0.5rem;align-items:center;margin-bottom:0.5rem;">
+      <input class="input denom-value" type="number" min="1" step="1" value="${d.value || ''}" placeholder="500" aria-label="value" />
+      <select class="select denom-type" aria-label="type">
+        <option value="bill" ${d.type !== 'coin' ? 'selected' : ''}>${t('billType', 'ورقة نقدية')}</option>
+        <option value="coin" ${d.type === 'coin' ? 'selected' : ''}>${t('coinType', 'قطعة معدنية')}</option>
+      </select>
+      <button class="btn btn-ghost btn-sm denom-remove" type="button" title="${t('delete', 'حذف')}">✕</button>
+    </div>`).join('');
+}
+
+function bindCashTab() {
+  const editor = document.getElementById('denomEditor');
+  if (!editor) return;
+  let list = (state.cashDenoms && state.cashDenoms.length) ? state.cashDenoms.map(d => ({ ...d })) : [{ value: 2000, type: 'bill' }, { value: 1000, type: 'bill' }, { value: 500, type: 'bill' }, { value: 200, type: 'bill' }, { value: 100, type: 'bill' }, { value: 50, type: 'bill' }, { value: 20, type: 'coin' }, { value: 10, type: 'coin' }, { value: 5, type: 'coin' }];
+  function draw() { editor.innerHTML = denomEditorRows(list); bindRows(); }
+  function readRows() {
+    const rows = [...editor.querySelectorAll('.denom-edit-row')];
+    const out = [];
+    rows.forEach(r => {
+      const value = Math.round(Number(r.querySelector('.denom-value').value));
+      const type = r.querySelector('.denom-type').value;
+      if (Number.isFinite(value) && value > 0) out.push({ value, type });
+    });
+    return out;
+  }
+  function bindRows() {
+    editor.querySelectorAll('.denom-remove').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const row = btn.closest('.denom-edit-row');
+        if (row) row.remove();
+      });
+    });
+  }
+  draw();
+  const addBtn = document.getElementById('denomAddRow');
+  if (addBtn) addBtn.addEventListener('click', () => {
+    editor.insertAdjacentHTML('beforeend', denomEditorRows([{ value: '', type: 'bill' }]));
+    bindRows();
+  });
+  const saveBtn = document.getElementById('denomSave');
+  if (saveBtn) saveBtn.addEventListener('click', async () => {
+    const denominations = readRows().sort((a, b) => b.value - a.value);
+    if (!denominations.length) {
+      if (window.Toast) window.Toast.warning(t('cashDenomEmpty', 'أضف فئة واحدة على الأقل'));
+      return;
+    }
+    const applyAllEl = document.getElementById('denomApplyAll');
+    const applyToAll = !!(applyAllEl && applyAllEl.checked);
+    saveBtn.disabled = true;
+    try {
+      const r = await apiFetch.put('/api/settings/cash-denominations', { denominations, applyToAll });
+      if (r && r.success) {
+        state.cashDenoms = denominations;
+        if (window.Toast) {
+          const extra = (r.data && r.data.appliedToAllStores != null) ? ' (' + r.data.appliedToAllStores + ' ' + t('storesUpdated', 'متجر') + ')' : '';
+          window.Toast.success(t('saved', 'تم الحفظ') + extra);
+        }
+        draw();
+      } else throw new Error((r && r.message) || 'Failed');
+    } catch (err) {
+      if (window.Toast) window.Toast.error((err && err.message) || t('error', 'Error'));
+    } finally {
+      saveBtn.disabled = false;
+    }
+  });
 }
 
 /* ---------- v3 — AI settings tab ---------- */
@@ -945,6 +1054,11 @@ export async function renderSettingsPage() {
   state.loading = true;
   content.innerHTML = renderSkeleton();
   await Promise.all([loadSettings(), loadCurrentUser()]);
+  // v4.5 — load the Controlcaisse denominations for the 💵 tab
+  try {
+    const d = await apiFetch.get('/api/settings/cash-denominations');
+    state.cashDenoms = (d && d.data && d.data.denominations) || [];
+  } catch (_) { state.cashDenoms = []; }
   state.loading = false;
   render();
 }

@@ -74,7 +74,23 @@ export async function renderSubscriptionPage(ctx) {
     pro:        { key: 'planProName',        fb: 'الاحترافية' },
     enterprise: { key: 'planEnterpriseName', fb: 'المؤسسات' }
   };
-  const lbl = (map, k) => { const m = map[k]; return m ? t(m.key, m.fb) : (k || '—'); };
+  const lbl = (map, k) => {
+    // v4.5 — the plan catalog is DYNAMIC (edited by the super-admin): prefer
+    // the live catalog display name, fall back to the i18n label for the
+    // default keys, then to the raw key.
+    try {
+      if (window.__dzposPlanNames && window.__dzposPlanNames[String(k)]) return window.__dzposPlanNames[String(k)];
+    } catch (_) {}
+    const m = map[k];
+    return m ? t(m.key, m.fb) : (k || '—');
+  };
+  // cache the catalog names from the freshest server response
+  function cachePlanNames(catalog) {
+    if (!Array.isArray(catalog)) return;
+    const names = {};
+    catalog.forEach(p => { if (p && p.key) names[p.key] = p.name || p.key; });
+    window.__dzposPlanNames = Object.assign({}, window.__dzposPlanNames || {}, names);
+  }
 
   /* ---------- load ---------- */
   async function fetchView() {
@@ -97,6 +113,7 @@ export async function renderSubscriptionPage(ctx) {
    * v4.3.1 — PLATFORM VIEW (super-admin, no store focus)
    * ============================================================ */
   if (data.isPlatform) {
+    cachePlanNames(data.catalog);
     window.dzposSubFocusId = '';
     const stores = data.stores || [];
     const pendCount = stores.filter(s => s.pending).length;
@@ -185,6 +202,7 @@ export async function renderSubscriptionPage(ctx) {
   const limits = st.limits || plan || {};
   const usage = data.usage || {};
   const catalog = data.catalog || [];
+  cachePlanNames(catalog); // v4.5 — live plan display names
   const state = data.state || 'active';
   const daysLeft = data.daysLeft;
   const pending = data.pending;
@@ -341,7 +359,7 @@ export async function renderSubscriptionPage(ctx) {
       return `
         <div class="sub-plan-card ${isCurrent ? 'current' : ''}" data-plan="${p.key}">
           ${isCurrent ? `<div class="sub-plan-tag">${t('subCurrentTag', 'خطتكم الحالية')}</div>` : ''}
-          <div class="sub-plan-name">${esc(lbl(PLAN_LABELS, p.key))}</div>
+          <div class="sub-plan-name">${esc(p.name || lbl(PLAN_LABELS, p.key))}</div>
           <div class="sub-plan-price">${p.key === 'trial' ? t('subFreeTrial', 'مجاناً') : `${fmtMoney(price)} <small>DZD / ${cycleView === 'yearly' ? t('subPerYearShort', 'سنة') : t('subPerMonthShort', 'شهر')}</small>`}</div>
           ${save}
           <ul class="sub-plan-feats">

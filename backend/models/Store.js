@@ -2,7 +2,7 @@
 // DZ POS PRO v3 — Multi-tenant store (tenant) model.
 const mongoose = require('mongoose');
 
-const PLANS = ['trial', 'basic', 'pro', 'enterprise'];
+const PLANS = ['trial', 'basic', 'pro', 'enterprise']; // static defaults — v4.5: dynamic catalog keys are also valid (validated via planService)
 const STATUSES = ['active', 'suspended'];
 
 // v4.3 — paid-plan expiry enforcement grace period (days). A paid plan
@@ -19,7 +19,21 @@ const storeSchema = new mongoose.Schema({
     address: { type: String, default: '', trim: true },
     city: { type: String, default: '', trim: true },
 
-    plan: { type: String, enum: PLANS, default: 'trial' },
+    // v4.5 — plan is validated against the DYNAMIC catalog (planService) at
+    // the controller layer; the enum only guards legacy static keys, so a
+    // custom plan created by the super-admin (e.g. "premium2026") is valid.
+    plan: {
+        type: String,
+        default: 'trial',
+        validate: {
+            validator: async function (v) {
+                if (!v) return true;
+                if (PLANS.includes(v)) return true;
+                try { return !!(await require('../services/planService').getPlan(v)); } catch (_) { return true; }
+            },
+            message: p => `Unknown subscription plan "${p.value}"`
+        }
+    },
     status: { type: String, enum: STATUSES, default: 'active' },
     trialEndsAt: { type: Date, default: () => new Date(Date.now() + 14 * 24 * 3600 * 1000) },
 

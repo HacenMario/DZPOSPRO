@@ -25,6 +25,7 @@ const Notification = require('../models/Notification');
 const { successResponse, createdResponse, errorResponse } = require('../utils/response');
 const { getTranslation } = require('../config/i18n');
 const plans = require('../config/plans');
+const planService = require('../services/planService'); // v4.5 — dynamic DB-backed catalog
 const { notifyStore } = require('../services/notifyService');
 const { invalidateStoreCache } = require('../middleware/tenant');
 const { runWithTenant } = require('../services/tenantContext');
@@ -113,7 +114,7 @@ async function applyPlanToStore(store, { plan, cycle, months, source }) {
         ? new Date(store.subscriptionEndsAt)
         : now; // renewing before expiry extends from the current end (no lost days)
     store.subscriptionEndsAt = addMonths(base, months);
-    store.limits = plans.planLimits(plan);          // professional: plan defaults
+    store.limits = await planService.planLimits(plan);   // v4.5 — dynamic plan defaults
     if (store.status === 'suspended') {             // a confirmed payment reactivates
         store.status = 'active';
         store.isActive = true;
@@ -183,7 +184,7 @@ const getMySubscription = async (req, res, next) => {
                 isPlatform: true,
                 isPlatformFocus: false,
                 stores,
-                catalog: plans.publicCatalog(),
+                catalog: await planService.getCatalog(),
                 currency: plans.CURRENCY
             });
         }
@@ -217,7 +218,7 @@ const getMySubscription = async (req, res, next) => {
             SubscriptionRequest.find({ storeId: store._id }).sort({ createdAt: -1 }).limit(20).lean()
         ]);
 
-        const catalog = plans.publicCatalog();
+        const catalog = (await planService.getCatalog()).filter(p => p.active);
         const currentPlan = catalog.find(p => p.key === store.plan) || null;
 
         return successResponse(res, {
@@ -268,7 +269,7 @@ const createRequest = async (req, res, next) => {
         if (!storeId) return errorResponse(res, 400, getTranslation('missingFields', lang));
         const { requestedPlan, billingCycle, paymentMethod, paymentReference, storeNote } = req.body;
 
-        if (!plans.isPlan(requestedPlan) || !plans.isPaidPlan(requestedPlan)) {
+        if (!requestedPlan || !(await planService.isPlan(requestedPlan)) || !(await planService.isPaidPlan(requestedPlan))) {
             return errorResponse(res, 400, getTranslation('subscriptionInvalidPlan', lang));
         }
         const cycle = billingCycle || 'monthly';
@@ -283,6 +284,7 @@ const createRequest = async (req, res, next) => {
         const existing = await SubscriptionRequest.findOne({ storeId: store._id, status: 'pending' });
         if (existing) return errorResponse(res, 400, getTranslation('subscriptionRequestExists', lang));
 
+        const amount = await planService.price(requestedPlan, cycle);
         const request = await SubscriptionRequest.create({
             storeId: store._id,
             requestedBy: req.user._id,
@@ -291,7 +293,7 @@ const createRequest = async (req, res, next) => {
             currentPlan: store.plan,
             requestedPlan,
             billingCycle: cycle,
-            amount: plans.price(requestedPlan, cycle),
+            amount,
             paymentMethod: method,
             paymentReference: String(paymentReference || '').trim(),
             storeNote: String(storeNote || '').trim()
@@ -306,7 +308,7 @@ const createRequest = async (req, res, next) => {
 
         notifySuperAdmins({
             title: lang === 'fr' ? '💼 Nouvelle demande d\u2019abonnement' : lang === 'en' ? '💼 New subscription request' : '💼 طلب اشتراك جديد',
-            body: `${store.name} → ${requestedPlan} · ${cycle} · ${plans.price(requestedPlan, cycle)} DZD`,
+            body: `${store.name} → ${requestedPlan} · ${cycle} · ${amount} DZD`,
             data: { requestId: request._id, storeId: store._id }
         });
 
@@ -378,6 +380,9 @@ const approveRequest = async (req, res, next) => {
             months,
             source: 'request'
         });
+        // v4.5 — keep the request's plan snapshot in sync with the (possibly
+        // renamed) catalog so the payment history always shows real names.
+        request.appliedPlan = store.plan;
 
         request.status = 'approved';
         request.paidAmount = paidAmount;
@@ -439,7 +444,7 @@ const adminApplyManual = async (req, res, next) => {
         const lang = req.lang || 'ar';
         const { storeId, plan, billingCycle } = req.body;
         if (!isObjectId(storeId)) return errorResponse(res, 400, getTranslation('subscriptionInvalidPlan', lang));
-        if (!plans.isPaidPlan(plan)) return errorResponse(res, 400, getTranslation('subscriptionInvalidPlan', lang));
+        if (!plan || !(await planService.isPaidPlan(plan))) return errorResponse(res, 400, getTranslation('subscriptionInvalidPlan', lang));
         const cycle = billingCycle || 'monthly';
         if (!plans.isCycle(cycle)) return errorResponse(res, 400, getTranslation('subscriptionInvalidCycle', lang));
         const months = Math.min(36, Math.max(1, parseInt(req.body.months, 10) || plans.CYCLE_MONTHS[cycle] || 1));
@@ -450,7 +455,7 @@ const adminApplyManual = async (req, res, next) => {
 
         const paidAmount = (req.body.paidAmount != null && !isNaN(Number(req.body.paidAmount)))
             ? Math.max(0, Number(req.body.paidAmount))
-            : plans.price(plan, cycle) * (months / plans.CYCLE_MONTHS[cycle]);
+            : (await planService.price(plan, cycle)) * (months / plans.CYCLE_MONTHS[cycle]);
 
         const { base, newEnd } = await applyPlanToStore(store, { plan, cycle, months, source: 'manual' });
 
@@ -497,6 +502,8 @@ const adminApplyManual = async (req, res, next) => {
 const adminOverview = async (req, res, next) => {
     try {
         const now = new Date();
+        const catalog = await planService.getCatalog();          // v4.5 — dynamic prices
+        const planMap = new Map(catalog.map(p => [p.key, p]));
         const stores = await Store.find({})
             .select('name email ownerName phone city plan status billingCycle subscriptionStart subscriptionEndsAt trialEndsAt limits createdAt')
             .lean();
@@ -520,8 +527,8 @@ const adminOverview = async (req, res, next) => {
 
         // MRR — monthly recurring revenue of running paid stores (DZD)
         const mrr = activePaid.reduce((sum, s) => {
-            const p = plans.CATALOG[s.plan] || plans.CATALOG.basic;
-            return sum + (s.billingCycle === 'yearly' ? p.yearly / 12 : p.monthly);
+            const p = planMap.get(s.plan) || planMap.get('basic');
+            return sum + (s.billingCycle === 'yearly' ? (p ? p.yearly : 0) / 12 : (p ? p.monthly : 0));
         }, 0);
 
         // requests + payments
@@ -617,6 +624,7 @@ const adminOverview = async (req, res, next) => {
             },
             monthlySeries: series,
             planDistribution: planDist,
+            catalog,
             expiringSoon,
             perStore,
             recentPayments: recentPaymentsRaw.map(p => ({
@@ -629,7 +637,88 @@ const adminOverview = async (req, res, next) => {
     } catch (err) { next(err); }
 };
 
+/* ================= v4.5 — PLAN CATALOG CRUD (super-admin) =================
+ * Full platform control over the subscription catalogue: name, prices,
+ * durations (monthly/yearly), limits, visibility. Every change applies
+ * INSTANTLY platform-wide (planService cache invalidation).
+ */
+const adminListPlans = async (req, res) => {
+    const Plan = require('../models/Plan');
+    const docs = await Plan.find({}).sort({ sortOrder: 1, monthly: 1 }).lean();
+    return successResponse(res, { data: docs.map(d => Plan.toPublic(d)), currency: plans.CURRENCY });
+};
+
+const adminCreatePlan = async (req, res, next) => {
+    try {
+        const lang = req.lang || 'ar';
+        const Plan = require('../models/Plan');
+        const { key, name, monthly, yearly, maxUsers, maxProducts, aiDailyCalls, isTrial, active, badge, sortOrder, description } = req.body;
+        const slug = String(key || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+        if (!slug || !name) return errorResponse(res, 400, getTranslation('missingFields', lang));
+        const exists = await Plan.findOne({ key: slug });
+        if (exists) return errorResponse(res, 400, getTranslation('subscriptionRequestExists', lang));
+        const doc = await Plan.create({
+            key: slug, name: String(name).trim(),
+            monthly: Math.max(0, Number(monthly) || 0),
+            yearly: Math.max(0, Number(yearly) || Math.max(0, Number(monthly) || 0) * 12),
+            maxUsers: Math.max(1, Number(maxUsers) || 5),
+            maxProducts: Math.max(1, Number(maxProducts) || 2000),
+            aiDailyCalls: Math.max(0, Number(aiDailyCalls) || 0),
+            isTrial: !!isTrial, active: active !== false,
+            badge: badge || (isTrial ? 'badge-warning' : 'badge-info'),
+            sortOrder: Number(sortOrder) || 100,
+            description: String(description || '').trim()
+        });
+        planService.invalidate();
+        return createdResponse(res, Plan.toPublic(doc), getTranslation('saved', lang));
+    } catch (err) { next(err); }
+};
+
+const adminUpdatePlan = async (req, res, next) => {
+    try {
+        const lang = req.lang || 'ar';
+        const Plan = require('../models/Plan');
+        const doc = await Plan.findById(req.params.id);
+        if (!doc) return errorResponse(res, 404, getTranslation('storeNotFound', lang));
+        const b = req.body || {};
+        if (b.name !== undefined) doc.name = String(b.name).trim() || doc.name;
+        if (b.monthly !== undefined) doc.monthly = Math.max(0, Number(b.monthly) || 0);
+        if (b.yearly !== undefined) doc.yearly = Math.max(0, Number(b.yearly) || 0);
+        if (b.maxUsers !== undefined) doc.maxUsers = Math.max(1, Number(b.maxUsers) || doc.maxUsers);
+        if (b.maxProducts !== undefined) doc.maxProducts = Math.max(1, Number(b.maxProducts) || doc.maxProducts);
+        if (b.aiDailyCalls !== undefined) doc.aiDailyCalls = Math.max(0, Number(b.aiDailyCalls) || 0);
+        if (b.isTrial !== undefined) doc.isTrial = !!b.isTrial;
+        if (b.active !== undefined) doc.active = !!b.active;
+        if (b.badge !== undefined) doc.badge = String(b.badge);
+        if (b.sortOrder !== undefined) doc.sortOrder = Number(b.sortOrder) || doc.sortOrder;
+        if (b.description !== undefined) doc.description = String(b.description || '').trim();
+        await doc.save();
+        planService.invalidate();
+        return successResponse(res, Plan.toPublic(doc), getTranslation('saved', lang));
+    } catch (err) { next(err); }
+};
+
+const adminDeletePlan = async (req, res, next) => {
+    try {
+        const lang = req.lang || 'ar';
+        const Plan = require('../models/Plan');
+        const doc = await Plan.findById(req.params.id);
+        if (!doc) return errorResponse(res, 404, getTranslation('storeNotFound', lang));
+        const inUse = await Store.countDocuments({ plan: doc.key });
+        if (inUse > 0) {
+            doc.active = false;               // soft-retire a plan still used by stores
+            await doc.save();
+            planService.invalidate();
+            return successResponse(res, Plan.toPublic(doc), getTranslation('saved', lang));
+        }
+        await doc.deleteOne();
+        planService.invalidate();
+        return successResponse(res, { deleted: true }, getTranslation('saved', lang));
+    } catch (err) { next(err); }
+};
+
 module.exports = {
     getMySubscription, listMyRequests, createRequest, cancelRequest,
-    adminListRequests, approveRequest, rejectRequest, adminApplyManual, adminOverview
+    adminListRequests, approveRequest, rejectRequest, adminApplyManual, adminOverview,
+    adminListPlans, adminCreatePlan, adminUpdatePlan, adminDeletePlan
 };

@@ -107,6 +107,7 @@
     inventory:  '<line x1="16.5" y1="5.5" x2="7.5" y2="14.5"/><polyline points="21 2 12 11 7 6"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/>',
     users:      '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><circle cx="17" cy="6" r="2" fill="currentColor"/>',
     sessions:   '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+    employees:  '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><circle cx="17" cy="6" r="2" fill="currentColor"/>',
     ai:         '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/><line x1="12" y1="3" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="21"/><line x1="3" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="21" y2="12"/>',
     subscription: '<rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="6" y1="15" x2="10" y2="15"/>',
     audit:      '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>',
@@ -197,6 +198,8 @@
     inventory:       { path: './modules/inventory.js',       fn: 'renderInventoryPage'     },
     users:           { path: './modules/users.js',           fn: 'renderUsersPage'         },
     sessions:        { path: './modules/sessions.js',        fn: 'renderSessionsPage'      },
+    // v4.5 — employees & attendance (دوام)
+    employees:       { path: './modules/employees.js',       fn: 'renderEmployeesPage'     },
     settings:        { path: './modules/settings.js',        fn: 'renderSettingsPage'      },
     // v3 — AI Center + Audit + Platform console
     ai:              { path: './modules/ai.js',              fn: 'renderAiPage'            },
@@ -249,19 +252,51 @@ async function loadPage(page) {
   }
 
   /* ---------- v3: role-based navigation visibility ---------- */
+  // v4.5 — the fine-grained permission layer: pages map to a permission and
+  // are hidden when the account lacks it (role defaults + explicit grants).
+  const PAGE_PERMS = {
+    dashboard:      null,
+    sales:          'sales.create',
+    products:       'products.view',
+    categories:     'products.view',
+    customers:      'customers.manage',
+    invoices:       'invoices.view',
+    tickets:        'invoices.view',
+    returns:        'invoices.view',
+    reports:        'reports.view',
+    coupons:        'coupons.manage',
+    suppliers:      'suppliers.manage',
+    purchaseOrders: 'purchaseOrders.manage',
+    inventory:      'inventory.adjust',
+    users:          'users.manage',
+    employees:      'employees.manage',
+    sessions:       'sessions.open',
+    ai:             'ai.use',
+    audit:          'audit.view',
+    settings:       null,            // everyone can open (profile tab); tabs self-gate
+    subscription:   null             // gated by role below (store admin/manager or platform)
+  };
+
   function applyRoleNavVisibility() {
     const role = (currentUser && currentUser.role) || '';
+    const granted = currentUser && Array.isArray(currentUser.permissions) ? currentUser.permissions : [];
+    const { isAllowed } = window.DZPOS_PERMS || {};
     document.querySelectorAll('.sidebar-nav .nav-item').forEach(link => {
       const page = link.dataset.page;
       let hidden = false;
       if (role === 'superadmin') {
-        // v3.2 — the platform owner has access to EVERYTHING
         hidden = false;
       } else {
         if (page === 'platform') hidden = true;
-        if (['audit', 'ai'].includes(page)) hidden = !['admin', 'manager'].includes(role);
         // v4.3 — the subscription center is for store admins/managers (hidden from cashiers)
         if (page === 'subscription') hidden = !['admin', 'manager'].includes(role);
+        // v4.5 — permission-based visibility for every other page
+        const perm = PAGE_PERMS[page];
+        if (perm && !hidden) {
+          if (role === 'admin') hidden = false;
+          else if (typeof isAllowed === 'function') hidden = !isAllowed({ role, permissions: granted }, perm);
+          else hidden = false; // catalog not loaded yet → keep legacy visibility
+        }
       }
       link.style.display = hidden ? 'none' : '';
     });
@@ -381,6 +416,15 @@ async function loadPage(page) {
     // v3 — hide role-restricted nav items
     applyRoleNavVisibility();
 
+    // v4.5 — refresh the cached account (permission grants / role changes
+    // made by the admin become visible after reload) then re-filter the nav.
+    if (window.DZPOS_PERMS && window.DZPOS_PERMS.refreshMe) {
+      window.DZPOS_PERMS.refreshMe().then(() => {
+        try { currentUser = JSON.parse(localStorage.getItem('user') || 'null') || currentUser; } catch (_) {}
+        applyRoleNavVisibility();
+      });
+    }
+
     // v4 — Language: the flag switcher (js/flags.js) binds itself to
     // [data-lang-switcher]; re-run defensively in case the topbar was
     // injected after DOMContentLoaded.
@@ -433,6 +477,16 @@ async function loadPage(page) {
         bannerMsg.textContent = connState === 'checking'
           ? connT('connChecking', 'جاري التحقق من الاتصال بالخادم...')
           : connT('offlineMessage', 'لا يوجد اتصال بالخادم. تحقّق من الإنترنت ثم أعد المحاولة.');
+        // v4.5 — real offline mode: the system KEEPS WORKING with device-stored
+        // data and queued operations sync automatically on reconnect.
+        if (connState === 'offline') {
+          (window.OfflineDB && typeof window.OfflineDB.pendingCount === 'function')
+            ? window.OfflineDB.pendingCount().then(n => {
+                bannerMsg.textContent = connT('offlineWorking', 'أنت تعمل بدون اتصال — البيانات محفوظة على جهازك والنظام يبقى يعمل ✓') +
+                  (n > 0 ? (' ' + connT('pendingSyncCount', '· عمليات بانتظار المزامنة') + ': ' + n) : '');
+              }).catch(() => {})
+            : Promise.resolve();
+        }
       }
       if (connChip) {
         connChip.classList.remove('conn-online', 'conn-offline', 'conn-checking');

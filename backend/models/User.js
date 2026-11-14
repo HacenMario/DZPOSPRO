@@ -16,6 +16,9 @@ const userSchema = new mongoose.Schema({
     password: { type: String, required: true, select: false },
     phone: { type: String, default: '' },
     role: { type: String, enum: ['admin', 'manager', 'cashier', 'superadmin'], default: 'cashier' },
+    // v4.5 — explicit permission grants (config/permissions.js keys) added on
+    // top of the role defaults. Empty array → role defaults only (legacy).
+    permissions: { type: [String], default: [] },
     isActive: { type: Boolean, default: true },
     settings: { type: userSettingsSchema, default: () => ({}) },
     lastLogin: { type: Date },

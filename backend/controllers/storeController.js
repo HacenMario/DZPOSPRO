@@ -92,7 +92,8 @@ const create = async (req, res, next) => {
         const store = new Store({
             name, ownerName: ownerName || adminName || '', email, phone: phone || '',
             city: city || '', address: address || '',
-            plan: ['trial', 'basic', 'pro', 'enterprise'].includes(plan) ? plan : 'trial',
+            // v4.5 — accept any plan from the DYNAMIC catalog (static defaults + super-admin custom plans)
+            plan: (await require('../services/planService').isPlan(plan)) ? plan : 'trial',
             trialEndsAt: trialDays ? new Date(Date.now() + parseInt(trialDays, 10) * 24 * 3600 * 1000) : undefined
         });
         if (limits && typeof limits === 'object') {

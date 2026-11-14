@@ -38,6 +38,10 @@ router.post('/requests', roleMiddleware('admin', 'manager'), ctrl.createRequest)
 router.post('/requests/:id/cancel', roleMiddleware('admin', 'manager'), ctrl.cancelRequest);
 
 // ---------- super-admin billing console ----------
+router.get('/admin/plans', roleMiddleware('superadmin'), ctrl.adminListPlans);
+router.post('/admin/plans', roleMiddleware('superadmin'), ctrl.adminCreatePlan);
+router.put('/admin/plans/:id', roleMiddleware('superadmin'), ctrl.adminUpdatePlan);
+router.delete('/admin/plans/:id', roleMiddleware('superadmin'), ctrl.adminDeletePlan);
 router.get('/admin/overview', roleMiddleware('superadmin'), ctrl.adminOverview);
 router.get('/admin/requests', roleMiddleware('superadmin'), ctrl.adminListRequests);
 router.post('/admin/requests/:id/approve', roleMiddleware('superadmin'), ctrl.approveRequest);

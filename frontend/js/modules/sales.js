@@ -1908,38 +1908,19 @@ async function lookupBarcode(code) {
 }
 
 /* ============================================================
- * Camera barcode scanner — v4.4 dual engine:
- *   1. Native BarcodeDetector API (Chrome/Edge/Android — fast, GPU)
- *   2. ZXing JS fallback (vendor/zxing.min.js — iOS Safari, Firefox,
- *      every browser; ~336 KB loaded on demand from our own origin)
- *   3. Manual entry as the last resort (+ USB scanners keep working
- *      via the keyboard-wedge listener on the search field).
- * Requires a secure context (https or localhost) for getUserMedia;
- * file:// pages get a clear explanation instead of a dead end.
+ * Camera barcode scanner — v4.5 shared engine (js/scanner.js):
+ *   • ONE engine for the whole app (POS barcode + invoice QR)
+ *   • Native BarcodeDetector (Chrome/Edge/Android) + ZXing fallback
+ *     (iOS Safari / Firefox) bundled locally
+ *   • ALL market formats: EAN-13/8, UPC-A/E, Code 128/39/93, ITF,
+ *     Codabar, QR, DataMatrix, PDF417, Aztec (+ native extras)
+ *   • USB scanners keep working as keyboards on the search field.
  * ============================================================ */
-
-let __zxingLoading = null;
-function loadZxing() {
-  if (window.ZXing && window.ZXing.BrowserMultiFormatReader) return Promise.resolve(true);
-  if (__zxingLoading) return __zxingLoading;
-  __zxingLoading = new Promise((resolve) => {
-    const sc = document.createElement('script');
-    sc.src = 'vendor/zxing.min.js?v=4.4.0';
-    sc.onload = () => resolve(!!(window.ZXing && window.ZXing.BrowserMultiFormatReader));
-    sc.onerror = () => resolve(false);
-    document.head.appendChild(sc);
-  });
-  return __zxingLoading;
-}
-
-function secureMediaAvailable() {
-  return !!(navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function');
-}
 
 async function openBarcodeCameraScanner() {
   // 1) A camera needs a secure context (https / localhost). On file:// the
   //    browser blocks getUserMedia entirely — explain it instead of failing.
-  if (!secureMediaAvailable()) {
+  if (!window.dzposScanner || !window.dzposScanner.canScan()) {
     if (typeof Swal !== 'undefined') {
       Swal.fire({
         title: t('scanBarcode', 'Scan barcode'),
@@ -1975,149 +1956,19 @@ async function openBarcodeCameraScanner() {
     return;
   }
 
-  // 2) Pick the best available decoding engine for THIS browser.
-  const nativeAvailable = 'BarcodeDetector' in window;
-  let zxingReader = null;
-  if (!nativeAvailable) {
-    if (window.Toast) window.Toast.info(t('scannerLoadingEngine', 'جاري تحميل محرك المسح…'));
-    const ok = await loadZxing();
-    if (!ok) {
-      // ZXing failed to load (offline?) → manual entry path
-      if (window.Toast) window.Toast.error(t('cameraInitFailed', 'Camera barcode detector failed to initialize'));
-      openBarcodeManualEntry();
-      return;
-    }
-    try {
-      const F = window.ZXing.BarcodeFormat, H = window.ZXing.DecodeHintType;
-      const formats = [
-        F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39,
-        F.CODE_93, F.ITF, F.CODABAR, F.QR_CODE, F.DATA_MATRIX
-      ].filter(Boolean);
-      const hints = new Map();
-      hints.set(H.POSSIBLE_FORMATS, formats);
-      hints.set(H.TRY_HARDER, true);
-      zxingReader = new window.ZXing.BrowserMultiFormatReader(hints, 180);
-    } catch (e) {
-      if (window.Toast) window.Toast.error(t('cameraInitFailed', 'Camera barcode detector failed to initialize'));
-      openBarcodeManualEntry();
-      return;
-    }
-  }
-
-  // 3) Shared camera modal (same UI for both engines)
-  const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay';
-  overlay.id = 'posCameraScanModal';
-  overlay.setAttribute('role', 'dialog');
-  overlay.setAttribute('aria-modal', 'true');
-  overlay.innerHTML = `
-    <div class="modal" role="document" style="max-width:520px;">
-      <div class="modal-header">
-        <div class="modal-title">${ICON.scan || '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12" stroke-width="3"/></svg>'}<span>${t('scanBarcode', 'Scan barcode')}</span></div>
-        <button class="modal-close" type="button" aria-label="${escapeHtml(t('close', 'Close'))}">${ICON.close}</button>
-      </div>
-      <div class="modal-body" style="padding:1rem;text-align:center;">
-        <div style="position:relative;width:100%;max-width:480px;margin:0 auto;background:#000;border-radius:8px;overflow:hidden;aspect-ratio:4/3;">
-          <video id="posScanVideo" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;"></video>
-          <div style="position:absolute;inset:8%;border:2px solid #10b981;border-radius:8px;pointer-events:none;box-shadow:0 0 0 9999px rgba(0,0,0,0.4);"></div>
-        </div>
-        <div style="margin-top:0.75rem;font-size:0.85rem;color:var(--text-muted);">
-          ${escapeHtml(t('scanBarcodeHint', 'Align the barcode inside the green box'))}
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-ghost" type="button" data-action="cancel">${t('cancel', 'Cancel')}</button>
-      </div>
-    </div>`;
-  document.body.appendChild(overlay);
-
-  let stream = null;
-  let rafId = null;
-  let stopped = false;
-  let zxingControls = null;
-
-  function close() {
-    if (stopped) return;
-    stopped = true;
-    if (rafId) cancelAnimationFrame(rafId);
-    try { if (zxingControls && typeof zxingControls.stop === 'function') zxingControls.stop(); } catch (_) {}
-    try { if (zxingReader && typeof zxingReader.reset === 'function') zxingReader.reset(); } catch (_) {}
-    if (stream) {
-      stream.getTracks().forEach(tr => { try { tr.stop(); } catch (_) {} });
-      stream = null;
-    }
-    overlay.remove();
-    document.removeEventListener('keydown', escHandler);
-  }
-
-  function onCode(code) {
-    if (stopped || !code) return;
-    if (window.Toast) window.Toast.success(t('barcodeFound', 'Barcode found') + ': ' + code);
-    close();
-    lookupBarcode(code);
-  }
-
-  overlay.querySelector('.modal-close').addEventListener('click', close);
-  overlay.querySelector('[data-action="cancel"]').addEventListener('click', close);
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-  const escHandler = (e) => { if (e.key === 'Escape') close(); };
-  document.addEventListener('keydown', escHandler);
-
-  const video = overlay.querySelector('#posScanVideo');
-
-  // 4a) ENGINE A — native BarcodeDetector (own getUserMedia stream)
-  if (nativeAvailable) {
-    let detector = null;
-    try {
-      const formats = await window.BarcodeDetector.getSupportedFormats();
-      detector = new window.BarcodeDetector({
-        formats: formats && formats.length ? formats : ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e']
+  await window.dzposScanner.open({
+    title: t('scanBarcode', 'Scan barcode'),
+    hint: t('scanBarcodeHint', 'Align the barcode inside the green box'),
+    onDecode: (code) => {
+      if (window.Toast) window.Toast.success(t('barcodeFound', 'Barcode found') + ': ' + code);
+      lookupBarcode(code).then(ok => {
+        if (ok) {
+          const searchInput = document.getElementById('posSearch');
+          if (searchInput) { searchInput.value = ''; state.search = ''; fetchProducts(true); }
+        }
       });
-    } catch (e) {
-      if (window.Toast) window.Toast.error(t('cameraInitFailed', 'Camera barcode detector failed to initialize'));
-      close();
-      return;
     }
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' } },
-        audio: false
-      });
-      video.srcObject = stream;
-      await new Promise(r => { video.onloadedmetadata = () => { video.play().catch(() => {}); r(); }; });
-    } catch (e) {
-      if (window.Toast) window.Toast.error(t('cameraAccessDenied', 'Camera access denied or unavailable'));
-      close();
-      return;
-    }
-    async function tick() {
-      if (stopped) return;
-      if (!video || video.readyState < 2) {
-        rafId = requestAnimationFrame(tick);
-        return;
-      }
-      try {
-        const codes = await detector.detect(video);
-        if (codes && codes.length > 0 && codes[0].rawValue) onCode(codes[0].rawValue);
-      } catch (_) { /* transient detection error */ }
-      if (!stopped) rafId = requestAnimationFrame(tick);
-    }
-    rafId = requestAnimationFrame(tick);
-    return;
-  }
-
-  // 4b) ENGINE B — ZXing (manages camera + decoding; works on iOS/Firefox)
-  try {
-    zxingControls = await zxingReader.decodeFromConstraints(
-      { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false },
-      video,
-      (result) => { if (result && result.text) onCode(result.text); }
-    );
-    stream = zxingReader && zxingReader.stream ? zxingReader.stream : null;
-  } catch (e) {
-    if (window.Toast) window.Toast.error(t('cameraAccessDenied', 'Camera access denied or unavailable'));
-    close();
-  }
+  });
 }
 
 /* Manual entry dialog — used when no engine and no camera are available. */
@@ -3067,6 +2918,7 @@ async function completeSale() {
     // v3 — OFFLINE MODE: queue the sale locally when the network is down
     if (!navigator.onLine && window.OfflineDB) {
       try {
+        body.offlineSync = true; // v4.5 — never lose an offline sale at replay
         await window.OfflineDB.addPendingOp({
           url: '/api/sales',
           method: 'POST',
@@ -3094,6 +2946,20 @@ async function completeSale() {
     }
 
     const r = await apiFetch.post('/api/sales', body);
+    // v4.5 — the apiFetch layer auto-queued the sale (server unreachable)
+    if (r && r.offlineQueued) {
+      state.cart = [];
+      state.selectedCustomerId = null;
+      state.selectedCustomerName = '';
+      state.couponCode = ''; state.couponDiscount = 0; state.couponObj = null;
+      state.amountPaid = 0; state.splitCash = 0; state.splitCard = 0;
+      state.paymentMethod = 'cash';
+      state.activeCustomerId = null;
+      try { renderCartInner(); renderTotalsInner(); } catch (_) {}
+      if (window.DZPWA) window.DZPWA.updateSyncChip?.();
+      if (btn) { btn.disabled = false; btn.innerHTML = oldHtml; }
+      return;
+    }
     if (r && r.success && r.data && r.data.sale) {
       const sale = r.data.sale;
       state.lastSale = sale;

@@ -17,7 +17,7 @@
  *   • Web Push (VAPID) + Background Sync unchanged.
  * ============================================================ */
 
-const VERSION = 'v4.4.0';
+const VERSION = 'v4.5.0';
 const SHELL_CACHE = `dzpos-shell-${VERSION}`;
 const STATIC_CACHE = `dzpos-static-${VERSION}`;
 const API_CACHE = `dzpos-api-${VERSION}`;
@@ -45,6 +45,8 @@ const SHELL_ASSETS = [
     './js/socket.js',
     './js/flags.js',
     './js/i18n.js',
+    './js/permissions.js',
+    './js/scanner.js',
     './js/db.js',
     './js/pwa.js',
     './js/notify.js',
@@ -68,6 +70,7 @@ const SHELL_ASSETS = [
     './js/modules/inventory.js',
     './js/modules/users.js',
     './js/modules/sessions.js',
+    './js/modules/employees.js',
     './js/modules/settings.js',
     './js/modules/ai.js',
     './js/modules/audit.js',
@@ -80,6 +83,7 @@ const SHELL_ASSETS = [
     './vendor/socket.io.min.js',
     './vendor/xlsx.full.min.js',
     './vendor/zxing.min.js',
+    './vendor/qrcode.min.js',
     './lang/ar.json',
     './lang/en.json',
     './lang/fr.json',
@@ -124,7 +128,11 @@ function isAppShell(req, url) {
 }
 
 /* ---------- strategies ---------- */
-// API GET: network-first, cached fallback capped at 2 minutes.
+// API GET: network-first. ONLINE the cache is capped at 2 minutes (fresh
+// statistics). OFFLINE the last-known-good cache is served REGARDLESS of
+// age — v4.5 makes the offline mode real: every page keeps working with
+// the stored data while there is no connection, marked x-dzpos-offline so
+// the UI can badge it.
 async function apiNetworkFirst(req, cacheName) {
     const cache = await caches.open(cacheName);
     try {
@@ -143,12 +151,21 @@ async function apiNetworkFirst(req, cacheName) {
     } catch (err) {
         const cached = await cache.match(req, { ignoreVary: true });
         if (cached) {
-            const at = Number(cached.headers.get('x-dzpos-cached-at') || 0);
-            if (at && (Date.now() - at) < API_CACHE_MAX_AGE_MS) return cached;
-            // stale → still better than nothing? NO — stale stats caused the
-            // "charts never update" bug. Only serve cache when it is fresh;
-            // otherwise surface the offline envelope so the UI can show a
-            // proper "no connection" state instead of old numbers.
+            // v4.5 — OFFLINE FIRST CLASS: serve the stored copy no matter how
+            // old (the device may be offline for hours). The stale cap only
+            // applies while ONLINE (a flaky network should not show old
+            // statistics) — when the fetch itself fails we ARE offline, and
+            // offline data beats an empty error page every time.
+            const clone = cached.clone();
+            try {
+                const body = await clone.arrayBuffer();
+                const headers = new Headers(clone.headers);
+                headers.set('x-dzpos-offline', '1');
+                headers.set('x-dzpos-cached-at', headers.get('x-dzpos-cached-at') || String(Date.now()));
+                return new Response(body, { status: 200, statusText: 'OK (offline cache)', headers });
+            } catch (_) {
+                return cached;
+            }
         }
         return new Response(JSON.stringify({ success: false, offline: true, message: 'OFFLINE' }),
             { status: 503, headers: { 'Content-Type': 'application/json' } });

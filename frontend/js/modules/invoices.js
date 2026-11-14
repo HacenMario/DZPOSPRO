@@ -23,6 +23,134 @@
 
 const apiFetch = window.apiFetch;
 const t = (k, fb) => (typeof window.t === 'function' ? window.t(k, fb) : (fb || k));
+/* ============================================================
+ * v4.5 — Invoice QR helpers
+ * ------------------------------------------------------------
+ * Every invoice carries a QR code (bottom of the receipt, the
+ * printed/PDF invoice and the 80mm ticket). The payload is
+ * "DZPOSINV:<saleId>" — scanning it with ANY account that belongs
+ * to the store where the sale was made opens the invoice detail
+ * instantly (server-side tenant scoping keeps other stores out).
+ * ============================================================ */
+const QR_PREFIX = 'DZPOSINV:';
+
+function saleQrPayload(sale) {
+  if (!sale || !sale._id) return '';
+  return QR_PREFIX + String(sale._id);
+}
+
+/* Generate a QR code as a PNG data URL using the bundled qrcode.min.js
+ * (davidshimjs). Returns Promise<string|null> — null when lib missing. */
+function saleQrDataUrl(text, size) {
+  return new Promise((resolve) => {
+    if (typeof window.QRCode === 'undefined') return resolve(null);
+    const holder = document.createElement('div');
+    holder.style.cssText = 'position:fixed;left:-9999px;top:-9999px;';
+    document.body.appendChild(holder);
+    try {
+      const q = new window.QRCode(holder, {
+        text: String(text || ''),
+        width: size || 160,
+        height: size || 160,
+        colorDark: '#111111',
+        colorLight: '#ffffff',
+        correctLevel: window.QRCode.CorrectLevel ? window.QRCode.CorrectLevel.M : undefined
+      });
+      setTimeout(() => {
+        let url = null;
+        const canvas = holder.querySelector('canvas');
+        if (canvas) url = canvas.toDataURL('image/png');
+        else {
+          const img = holder.querySelector('img');
+          if (img && img.src && img.src.startsWith('data:')) url = img.src;
+        }
+        holder.remove();
+        resolve(url);
+      }, 40);
+    } catch (e) {
+      holder.remove();
+      resolve(null);
+    }
+  });
+}
+
+/* Open an invoice by its id (used by the QR scanner) — tolerant to
+ * permissions/other-store errors with a precise, friendly message. */
+async function openInvoiceById(id) {
+  try {
+    const r = await apiFetch.get('/api/sales/' + id);
+    if (r && r.success) {
+      const saleObj = (r.data && r.data.sale) ? r.data.sale : (r.sale || r.data);
+      if (saleObj) {
+        // load store settings for the receipt layout (same as list path)
+        if (!state.settings) {
+          try {
+            const s = await apiFetch.get('/api/settings');
+            state.settings = (s && s.data && s.data.settings) || null;
+          } catch (_) {}
+        }
+        viewInvoiceModal(saleObj);
+        return true;
+      }
+    }
+    throw new Error(t('invoiceQrNotFound', 'Invoice not found'));
+  } catch (e) {
+    if (window.Toast) window.Toast.error(
+      (e && e.status === 404)
+        ? t('invoiceQrOtherStore', 'This invoice belongs to another store (or no longer exists).')
+        : ((e && e.message) || t('invoiceQrNotFound', 'Invoice not found')));
+    return false;
+  }
+}
+
+/* Camera QR scan → open the invoice. Reuses the shared scanner engine. */
+async function openInvoiceQrScanner() {
+  if (!window.dzposScanner || !window.dzposScanner.canScan()) {
+    // manual entry fallback (type the code pasted from another device)
+    if (typeof Swal !== 'undefined') {
+      Swal.fire({
+        title: t('invoiceQrScan', 'Scan invoice QR'),
+        html: '<div style="font-size:0.9rem;line-height:1.5;text-align:' + (document.documentElement.dir === 'rtl' ? 'right' : 'left') + ';">' +
+          escapeHtml(window.isSecureContext
+            ? t('cameraNotSupported', 'Camera not supported here — enter the invoice number instead.')
+            : t('cameraNeedsHttps', 'Camera scanning works in the online app (https). Enter the invoice number instead.')) +
+          '</div>' +
+          '<input id="invoiceQrManual" class="input" type="text" placeholder="' + escapeHtml(t('invoiceNumber', 'Invoice number')) + '" style="margin-top:0.75rem;" autofocus />',
+        confirmButtonText: t('search', 'Search'),
+        showCancelButton: true,
+        confirmButtonColor: '#10b981',
+        preConfirm: () => {
+          const v = document.getElementById('invoiceQrManual').value.trim();
+          if (!v) { Swal.showValidationMessage(t('searchRequired', 'Please enter a value')); return false; }
+          return v;
+        }
+      }).then((res) => {
+        if (res && res.isConfirmed && res.value) {
+          state.search = res.value; state.page = 1; refreshTable();
+        }
+      });
+    }
+    return;
+  }
+  try { if (window.Toast && window.Toast.info) window.Toast.info(t('scannerLoadingEngine', 'جاري تحميل محرك المسح…')); } catch (_) {}
+  await window.dzposScanner.open({
+    title: t('invoiceQrScan', 'Scan invoice QR'),
+    hint: t('invoiceQrScanHint', 'Point the camera at the QR code at the bottom of the invoice'),
+    onDecode: async (code) => {
+      const c = String(code || '').trim();
+      if (c.indexOf(QR_PREFIX) === 0) {
+        const id = c.slice(QR_PREFIX.length).trim();
+        if (/^[a-f0-9]{24}$/i.test(id)) { openInvoiceById(id); return; }
+      }
+      // Not an invoice QR → try as invoice NUMBER search
+      if (window.Toast) window.Toast.warning(t('invoiceQrNotInvoice', 'This code is not a DZ POS invoice QR — searching it as an invoice number…'));
+      state.search = c; state.page = 1; refreshTable();
+    }
+  });
+}
+
+window.__dzposOpenInvoiceById = openInvoiceById;
+
 
 let state = {
   page: 1,
@@ -365,6 +493,10 @@ function renderToolbar() {
         </div>
       </div>
       <div class="toolbar-right">
+        <button class="btn btn-primary btn-sm" id="invoiceQrScanBtn" type="button" title="${escapeHtml(t('invoiceQrScan', 'Scan invoice QR'))}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12" stroke-width="3"/></svg>
+          <span>${t('invoiceQrScan', 'Scan invoice QR')}</span>
+        </button>
         <button class="btn btn-secondary btn-sm" id="invoiceRefreshBtn" type="button">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
           <span>${t('refresh', 'Refresh')}</span>
@@ -639,6 +771,8 @@ function bindToolbar() {
     if (q) q.value = '';
     state.page = 1; refreshTable();
   });
+  const qrScanBtn = document.getElementById('invoiceQrScanBtn');
+  if (qrScanBtn) qrScanBtn.addEventListener('click', () => openInvoiceQrScanner());
   const refresh = document.getElementById('invoiceRefreshBtn');
   if (refresh) refresh.addEventListener('click', () => refreshTable());
   const exportBtn = document.getElementById('invoiceExportBtn');
@@ -983,6 +1117,10 @@ const headerText = settings.invoiceHeader && settings.invoiceHeader.trim() ? `
                 ${totalWords ? `<div class="receipt-words">${escapeHtml(IL.wordsIntro)} ${escapeHtml(totalWords)}.</div>` : ''}
                 ${customText ? `<div class="receipt-custom-text" style="margin-top:0.5rem;font-size:0.78rem;color:#111;white-space:pre-wrap;">${escapeHtml(customText)}</div>` : ''}
               </div>
+              <div class="receipt-qr" id="invoiceDetailQr" style="text-align:center;margin-top:0.6rem;padding-top:0.5rem;border-top:1px dashed #999;">
+                <div id="invoiceDetailQrImg" style="display:inline-block;min-height:96px;"></div>
+                <div style="font-size:0.68rem;color:#555;margin-top:0.15rem;">${escapeHtml(t('invoiceQrCaption', 'Scan to open this invoice'))} · ${escapeHtml(invoiceNo)}</div>
+              </div>
               <div class="receipt-foot">
                 ${escapeHtml(settings.invoiceFooter || IL.thanks)}
               </div>
@@ -1011,6 +1149,24 @@ const headerText = settings.invoiceHeader && settings.invoiceHeader.trim() ? `
 
   document.body.insertAdjacentHTML('beforeend', html);
   const overlay = document.getElementById('invoiceDetailModal');
+  // v4.5 — render the invoice QR inside the detail modal (async image)
+  (async () => {
+    try {
+      const url = await saleQrDataUrl(saleQrPayload(sale), 120);
+      const holder = document.getElementById('invoiceDetailQrImg');
+      if (holder && url) {
+        const img = document.createElement('img');
+        img.src = url;
+        img.alt = 'QR ' + invoiceNo;
+        img.width = 104; img.height = 104;
+        img.style.imageRendering = 'pixelated';
+        holder.innerHTML = '';
+        holder.appendChild(img);
+      } else if (holder) {
+        holder.textContent = '';
+      }
+    } catch (_) { /* QR is cosmetic — never break the modal */ }
+  })();
 
   function close() { overlay.remove(); }
   overlay.querySelector('.modal-close').addEventListener('click', close);
@@ -1281,6 +1437,20 @@ if (pdfHeaderText) {
         y += 5;
       });
     }
+
+    // ===== v4.5 — invoice QR (scan to open) =====
+    try {
+      const qrUrl = await saleQrDataUrl(saleQrPayload(sale), 160);
+      if (qrUrl) {
+        const qrSize = 26;
+        let qrY = y + 4;
+        if (qrY + qrSize > pageHeight - 18) qrY = pageHeight - 18 - qrSize;
+        doc.addImage(qrUrl, 'PNG', centerX - qrSize / 2, qrY, qrSize, qrSize);
+        doc.setFontSize(7);
+        doc.setTextColor(110, 110, 110);
+        doc.text(t('invoiceQrCaption', 'Scan to open this invoice') + ' · ' + invoiceNo, centerX, qrY + qrSize + 3, { align: 'center' });
+      }
+    } catch (qrErr) { console.warn('[invoices] qr pdf skipped', qrErr); }
 
     // ===== Footer =====
     doc.setFontSize(8);

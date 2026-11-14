@@ -205,6 +205,11 @@
   <div class="tk-dashed"></div>
   <div class="tk-row tk-total"><span>${escapeHtml(L.totalTTC)}</span><span>${escapeHtml(fmtMoney(total, currency))}</span></div>
   <div class="tk-dashed"></div>
+  <div class="tk-center" style="margin-top:4px;">
+    <div id="ticketQrImg"></div>
+    <div class="tk-tiny">${escapeHtml(t('invoiceQrCaption', 'Scan to open this invoice'))} · ${escapeHtml(invoiceNo)}</div>
+  </div>
+  <div class="tk-dashed"></div>
   <div class="tk-center tk-small">${escapeHtml(footer)}</div>
   <div class="tk-center tk-tiny">DZ POS PRO</div>
 </div>`;
@@ -261,6 +266,33 @@
     area.id = 'ticketPrintArea';
     area.innerHTML = buildTicketHTML(sale, settings, lang);
     document.body.appendChild(area);
+
+    // v4.5 — invoice QR on the 80mm ticket (async, completes well before print)
+    (async () => {
+      try {
+        if (typeof window.QRCode === 'undefined') return;
+        const payload = sale && sale._id ? 'DZPOSINV:' + String(sale._id) : '';
+        if (!payload) return;
+        const holder = document.createElement('div');
+        holder.style.cssText = 'position:fixed;left:-9999px;top:-9999px;';
+        document.body.appendChild(holder);
+        new window.QRCode(holder, { text: payload, width: 88, height: 88, colorDark: '#000000', colorLight: '#ffffff' });
+        setTimeout(() => {
+          const target = document.getElementById('ticketQrImg');
+          const canvas = holder.querySelector('canvas');
+          const imgSrc = holder.querySelector('img');
+          if (target) {
+            if (canvas && target.appendChild) target.appendChild(canvas.cloneNode(true));
+            else if (imgSrc && imgSrc.src) {
+              const im = document.createElement('img');
+              im.src = imgSrc.src; im.width = 88; im.height = 88;
+              target.appendChild(im);
+            }
+          }
+          holder.remove();
+        }, 30);
+      } catch (_) { /* QR is cosmetic — never break printing */ }
+    })();
 
     document.body.classList.add('printing-ticket');
     setTimeout(() => {

@@ -45,7 +45,19 @@ const settingSchema = new mongoose.Schema({
     currentInvoiceYear: { type: Number, default: 0 },
     currentInvoiceMonth: { type: Number, default: 0 },
     currentInvoiceCounter: { type: Number, default: 0 },
-    lastInvoiceNumber: { type: Number, default: 0 }
+    lastInvoiceNumber: { type: Number, default: 0 },
+
+    // v4.5 — Controlcaisse: currency denominations used for the strict
+    // cash-count at session open/close. Edited by the store admin for his
+    // store; the super-admin can push ONE set to ALL stores at once.
+    // shape: [{ value: 500, type: 'bill' | 'coin' }]
+    cashDenominations: {
+        type: [{
+            value: { type: Number, required: true, min: 0 },
+            type:  { type: String, enum: ['coin', 'bill'], default: 'bill' }
+        }],
+        default: []
+    }
 }, { timestamps: true });
 
 settingSchema.plugin(tenantPlugin);

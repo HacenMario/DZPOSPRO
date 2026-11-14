@@ -111,6 +111,44 @@
 
   function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+  // ===== v4.5 — OFFLINE WRITE QUEUE (auto) =====
+  // When a write (POST/PUT) to a syncable endpoint fails because the network
+  // is down (no connection or server unreachable), the operation is queued
+  // in IndexedDB (OfflineDB) and a synthetic success is returned. On
+  // reconnect pwa.js replays the queue automatically. GET reads keep
+  // working from the Service Worker's cached last-known-good data.
+  const SYNCABLE_WRITE_URLS = [
+    '/api/sales',
+    '/api/customers'
+  ];
+  function isSyncableWrite(url, method) {
+    if (!url || (method || '').toUpperCase() === 'GET') return false;
+    const u = url.split('?')[0];
+    return SYNCABLE_WRITE_URLS.some(p => u === p || u.startsWith(p + '/') || u.endsWith(p));
+  }
+  async function queueOfflineWrite(url, method, body) {
+    try {
+      if (global.OfflineDB) {
+        const qBody = typeof body === 'string' ? JSON.parse(body) : (body || null);
+        // v4.5 — mark sales created offline so the server attaches them even
+        // when the session was closed in the meantime (never lose a sale).
+        if (qBody && url.indexOf('/api/sales') !== -1 && typeof qBody === 'object') qBody.offlineSync = true;
+        await global.OfflineDB.addPendingOp({
+          url: url.startsWith('http') ? url : url,
+          method: method.toUpperCase(),
+          body: qBody,
+          kind: url.indexOf('/api/sales') !== -1 ? 'sale' : 'customer',
+          label: ''
+        });
+        if (typeof window.Toast === 'object' && window.Toast.warning) {
+          window.Toast.warning(t('offlineQueued', 'لا يوجد اتصال — تم الحفظ محلياً وسيُرسل تلقائياً عند عودة الشبكة ✓'));
+        }
+        return true;
+      }
+    } catch (e) { console.error('[apiFetch] offline queue failed', e); }
+    return false;
+  }
+
   async function apiFetch(url, options) {
     options = options || {};
     const token = getToken();
@@ -156,6 +194,14 @@
           } catch (_) { /* keep old base */ }
           if (!baseChanged) await delay(GET_RETRY_DELAY_MS);
           continue;
+        }
+        // v4.5 — OFFLINE: queue syncable writes instead of failing the sale
+        const isWrite = options.method && options.method.toUpperCase() !== 'GET';
+        if (isWrite && !callerAborted && isSyncableWrite(url, options.method)) {
+          const queued = await queueOfflineWrite(url, options.method, body);
+          if (queued) {
+            return { success: true, offlineQueued: true, data: null, message: 'QUEUED_OFFLINE' };
+          }
         }
         console.error('[apiFetch] network error:', networkErr);
         if (typeof window.Toast === 'object' && window.Toast.error) {

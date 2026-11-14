@@ -425,6 +425,16 @@ function openUserModal(user) {
                 </select>
               </div>
             </div>
+
+            <!-- v4.5 — fine-grained permissions (🔐) -->
+            <div class="perm-section" id="uPermSection" style="margin-top:1rem;border-top:1px solid var(--border,#e5e7eb);padding-top:0.9rem;">
+              <label class="form-label" style="display:flex;align-items:center;gap:0.45rem;cursor:pointer;">
+                <input type="checkbox" id="uPermToggle" style="width:16px;height:16px;accent-color:#10b981;" />
+                🔐 ${t('permCustomize', 'تخصيص الصلاحيات الدقيقة')}
+              </label>
+              <div class="help-text">${t('permCustomizeHelp', 'الأدمن والسوبر-أدمن يملكان كل الصلاحيات تلقائياً. فعّل الخيار لمنح صلاحيات إضافية لهذا الحساب (فوق صلاحيات دوره الافتراضية).')}</div>
+              <div id="uPermGrid" hidden style="margin-top:0.6rem;"></div>
+            </div>
           </div>
           <div class="modal-footer">
             <button class="btn btn-ghost" type="button" data-action="cancel">${t('cancel', 'Cancel')}</button>
@@ -468,6 +478,144 @@ function openUserModal(user) {
     const body = { name, email, role, isActive };
     if (!isEdit) body.password = password;
     else if (password) body.password = password;
+
+    const btn = overlay.querySelector('button[type="submit"]');
+    if (btn) btn.disabled = true;
+    try {
+      const url = id ? '/api/users/' + id : '/api/users';
+      const r = id ? await apiFetch.put(url, body) : await apiFetch.post(url, body);
+      if (r && r.success) {
+        if (window.Toast) window.Toast.success(id ? t('userUpdated', 'User updated') : t('userCreated', 'User created'));
+        close();
+        await refreshTable();
+      } else {
+        throw new Error((r && r.message) || 'Failed');
+      }
+    } catch (err) {
+      const msg = (err && err.message) || '';
+      if (/exists|موجود|existe|already/i.test(msg)) {
+        if (window.Toast) window.Toast.error(t('emailExists', 'Email already in use'));
+      } else {
+        if (window.Toast) window.Toast.error(msg || t('error', 'Error'));
+      }
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  });
+
+  /* ===== v4.5 — permission grid ===== */
+  const PERM_GROUPS = (window.DZPOS_PERMS && window.DZPOS_PERMS.GROUPS) || {};
+  const GRP_LABELS = {
+    sales: t('permGroupSales', 'المبيعات والفواتير'),
+    inventory: t('permGroupInventory', 'المخزون والمنتجات'),
+    customers: t('permGroupCustomers', 'العملاء والكوبونات'),
+    insights: t('permGroupInsights', 'التقارير والذكاء الاصطناعي'),
+    cash: t('permGroupCash', 'الصندوق والجلسات'),
+    staff: t('permGroupStaff', 'الموظفون والحسابات'),
+    admin: t('permGroupAdmin', 'الإدارة')
+  };
+  const PERM_LABELS = {
+    'sales.create': t('permSalesCreate', 'تسجيل مبيعة جديدة'),
+    'sales.cancel': t('permSalesCancel', 'إلغاء مبيعة / فاتورة'),
+    'sales.discount': t('permSalesDiscount', 'تطبيق تخفيضات'),
+    'invoices.view': t('permInvoicesView', 'عرض الفواتير'),
+    'returns.create': t('permReturnsCreate', 'تسجيل مرتجع'),
+    'products.view': t('permProductsView', 'عرض المنتجات'),
+    'products.manage': t('permProductsManage', 'إضافة وتعديل المنتجات'),
+    'inventory.adjust': t('permInventoryAdjust', 'تعديل المخزون'),
+    'categories.manage': t('permCategoriesManage', 'إدارة الفئات'),
+    'suppliers.manage': t('permSuppliersManage', 'إدارة الموردين'),
+    'purchaseOrders.manage': t('permPOManage', 'إدارة أوامر الشراء'),
+    'customers.manage': t('permCustomersManage', 'إدارة العملاء'),
+    'coupons.manage': t('permCouponsManage', 'إدارة الكوبونات'),
+    'reports.view': t('permReportsView', 'عرض التقارير'),
+    'ai.use': t('permAiUse', 'استخدام الذكاء الاصطناعي'),
+    'sessions.open': t('permSessionsOpen', 'فتح جلسة صندوق'),
+    'sessions.close': t('permSessionsClose', 'إغلاق جلسة الصندوق'),
+    'sessions.viewAll': t('permSessionsAll', 'عرض جلسات الجميع'),
+    'employees.manage': t('permEmployees', 'إدارة الموظفين والدوام'),
+    'users.manage': t('permUsersManage', 'إدارة الحسابات والصلاحيات'),
+    'settings.edit': t('permSettingsEdit', 'تعديل الإعدادات'),
+    'audit.view': t('permAuditView', 'عرض سجل العمليات')
+  };
+  const currentGrants = (user && Array.isArray(user.permissions)) ? user.permissions.slice() : [];
+  const roleDefaults = (window.DZPOS_PERMS && window.DZPOS_PERMS.ROLE_DEFAULTS && window.DZPOS_PERMS.ROLE_DEFAULTS[(user && user.role) || 'cashier']) || [];
+  const permToggle = overlay.querySelector('#uPermToggle');
+  const permGrid = overlay.querySelector('#uPermGrid');
+  const canTargetAdminLike = user && ['admin', 'superadmin'].includes(user.role);
+
+  function renderPermGrid() {
+    if (canTargetAdminLike) {
+      permGrid.innerHTML = '<div class="help-text">' + t('permAdminFull', 'هذا الحساب يملك كل الصلاحيات تلقائياً ولا يمكن تقييده.') + '</div>';
+      return;
+    }
+    const groupsHtml = Object.entries(PERM_GROUPS).map(([g, keys]) => {
+      const items = keys.map(k => {
+        const granted = currentGrants.includes(k);
+        const isDefault = roleDefaults.includes(k);
+        return `<label class="perm-item ${granted ? 'granted' : ''} ${isDefault ? 'default' : ''}" title="${isDefault ? t('permRoleDefault', 'مضمنة في صلاحيات الدور') : ''}">
+          <input type="checkbox" data-perm="${k}" ${granted ? 'checked' : ''} />
+          <span>${escapeHtml(PERM_LABELS[k] || k)}</span>
+          ${isDefault ? '<small class="perm-def">★</small>' : ''}
+        </label>`;
+      }).join('');
+      return `<div class="perm-group"><div class="perm-group-title">${escapeHtml(GRP_LABELS[g] || g)}</div><div class="perm-grid">${items}</div></div>`;
+    }).join('');
+    permGrid.innerHTML = groupsHtml + '<div class="help-text" style="margin-top:0.4rem;">★ = ' + t('permRoleDefault', 'مضمنة في صلاحيات الدور') + '</div>';
+  }
+
+  if (permToggle && permGrid) {
+    // pre-check when the account already has explicit grants
+    if (currentGrants.length) permToggle.checked = true;
+    permToggle.addEventListener('change', () => {
+      permGrid.hidden = !permToggle.checked;
+      if (!permGrid.hidden && !permGrid.dataset.rendered) {
+        renderPermGrid();
+        permGrid.dataset.rendered = '1';
+      }
+    });
+    if (currentGrants.length) {
+      permGrid.hidden = false;
+      renderPermGrid();
+      permGrid.dataset.rendered = '1';
+    }
+  }
+
+  function collectPermissions() {
+    if (!permToggle || !permToggle.checked) return undefined;
+    if (canTargetAdminLike) return undefined;
+    const boxes = overlay.querySelectorAll('#uPermGrid input[type="checkbox"][data-perm]');
+    const out = [];
+    boxes.forEach(b => { if (b.checked) out.push(b.dataset.perm); });
+    return out;
+  }
+
+  overlay.querySelector('#userForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = overlay.querySelector('#userId').value;
+    const name = overlay.querySelector('#uName').value.trim();
+    const email = overlay.querySelector('#uEmail').value.trim();
+    const password = overlay.querySelector('#uPassword').value;
+    const role = overlay.querySelector('#uRole').value;
+    const isActive = overlay.querySelector('#uIsActive').value === 'true';
+
+    if (!name) { if (window.Toast) window.Toast.error(t('nameRequired', 'Name is required')); return; }
+    if (!email || !isValidEmail(email)) { if (window.Toast) window.Toast.error(t('emailInvalid', 'Please enter a valid email')); return; }
+    if (!isEdit && (!password || password.length < 6)) {
+      if (window.Toast) window.Toast.error(t('passwordMinLength', 'Minimum 6 characters'));
+      return;
+    }
+    if (isEdit && password && password.length < 6) {
+      if (window.Toast) window.Toast.error(t('passwordMinLength', 'Minimum 6 characters'));
+      return;
+    }
+
+    const body = { name, email, role, isActive };
+    if (!isEdit) body.password = password;
+    else if (password) body.password = password;
+    // v4.5 — send explicit grants when the grid was customized
+    const perms = collectPermissions();
+    if (perms !== undefined) body.permissions = perms;
 
     const btn = overlay.querySelector('button[type="submit"]');
     if (btn) btn.disabled = true;
